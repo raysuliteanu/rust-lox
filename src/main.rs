@@ -50,12 +50,18 @@ struct CharacterToken {
 enum Tokens {
     LeftParen(CharacterToken),
     RightParen(CharacterToken),
+    LeftBrace(CharacterToken),
+    RightBrace(CharacterToken),
+    NewLine(CharacterToken),
     Eof(&'static str),
 }
 
 const TOKEN_EOF: Tokens = Tokens::Eof("EOF");
 const TOKEN_LEFT_PAREN: Tokens = Tokens::LeftParen(CharacterToken { display_name: "LEFT_PAREN", token: '(' });
 const TOKEN_RIGHT_PAREN: Tokens = Tokens::RightParen(CharacterToken { display_name: "RIGHT_PAREN", token: ')' });
+const TOKEN_LEFT_BRACE: Tokens = Tokens::LeftParen(CharacterToken { display_name: "LEFT_BRACE", token: '{' });
+const TOKEN_RIGHT_BRACE: Tokens = Tokens::RightParen(CharacterToken { display_name: "RIGHT_BRACE", token: '}' });
+const TOKEN_NL: Tokens = Tokens::RightParen(CharacterToken { display_name: "NL", token: '\n' });
 
 #[derive(Debug, Default)]
 struct Scanner {
@@ -82,6 +88,9 @@ impl From<char> for Tokens {
         match value {
             '(' => TOKEN_LEFT_PAREN,
             ')' => TOKEN_RIGHT_PAREN,
+            '{' => TOKEN_LEFT_BRACE,
+            '}' => TOKEN_RIGHT_BRACE,
+            '\n' => TOKEN_NL,
             _ => TOKEN_EOF,
         }
     }
@@ -92,6 +101,9 @@ impl Display for Tokens {
         match self {
             Tokens::LeftParen(t) => write!(f, "{} {}", t.display_name, t.token),
             Tokens::RightParen(t) => write!(f, "{} {}", t.display_name, t.token),
+            Tokens::LeftBrace(t) => write!(f, "{} {}", t.display_name, t.token),
+            Tokens::RightBrace(t) => write!(f, "{} {}", t.display_name, t.token),
+            Tokens::NewLine(t) => write!(f, "{} {}", t.display_name, t.token),
             Tokens::Eof(s) => write!(f, "{} ", s),
         }
     }
