@@ -40,29 +40,6 @@ fn main() {
     }
 }
 
-#[derive(Debug)]
-struct CharacterToken {
-    display_name: &'static str,
-    token: char,
-}
-
-#[derive(Debug)]
-enum Tokens {
-    LeftParen(CharacterToken),
-    RightParen(CharacterToken),
-    LeftBrace(CharacterToken),
-    RightBrace(CharacterToken),
-    NewLine(CharacterToken),
-    Eof(&'static str),
-}
-
-const TOKEN_EOF: Tokens = Tokens::Eof("EOF");
-const TOKEN_LEFT_PAREN: Tokens = Tokens::LeftParen(CharacterToken { display_name: "LEFT_PAREN", token: '(' });
-const TOKEN_RIGHT_PAREN: Tokens = Tokens::RightParen(CharacterToken { display_name: "RIGHT_PAREN", token: ')' });
-const TOKEN_LEFT_BRACE: Tokens = Tokens::LeftParen(CharacterToken { display_name: "LEFT_BRACE", token: '{' });
-const TOKEN_RIGHT_BRACE: Tokens = Tokens::RightParen(CharacterToken { display_name: "RIGHT_BRACE", token: '}' });
-const TOKEN_NL: Tokens = Tokens::RightParen(CharacterToken { display_name: "NL", token: '\n' });
-
 #[derive(Debug, Default)]
 struct Scanner {
     tokens: Vec<Tokens>,
@@ -83,6 +60,31 @@ impl Display for Scanner {
     }
 }
 
+#[derive(Debug)]
+struct CharacterToken {
+    display_name: &'static str,
+    token: char,
+}
+
+#[derive(Debug)]
+enum Tokens {
+    Character(CharacterToken),
+    Eof(&'static str),
+}
+
+const TOKEN_EOF: Tokens = Tokens::Eof("EOF");
+const TOKEN_LEFT_PAREN: Tokens = Tokens::Character(CharacterToken { display_name: "LEFT_PAREN", token: '(' });
+const TOKEN_RIGHT_PAREN: Tokens = Tokens::Character(CharacterToken { display_name: "RIGHT_PAREN", token: ')' });
+const TOKEN_LEFT_BRACE: Tokens = Tokens::Character(CharacterToken { display_name: "LEFT_BRACE", token: '{' });
+const TOKEN_RIGHT_BRACE: Tokens = Tokens::Character(CharacterToken { display_name: "RIGHT_BRACE", token: '}' });
+const TOKEN_NL: Tokens = Tokens::Character(CharacterToken { display_name: "NL", token: '\n' });
+const TOKEN_COMMA: Tokens = Tokens::Character(CharacterToken { display_name: "COMMA", token: ',' });
+const TOKEN_DOT: Tokens = Tokens::Character(CharacterToken { display_name: "DOT", token: '.' });
+const TOKEN_DASH: Tokens = Tokens::Character(CharacterToken { display_name: "MINUS", token: '-' });
+const TOKEN_PLUS: Tokens = Tokens::Character(CharacterToken { display_name: "PLUS", token: '+' });
+const TOKEN_SEMI_COLON: Tokens = Tokens::Character(CharacterToken { display_name: "SEMICOLON", token: ';' });
+const TOKEN_STAR: Tokens = Tokens::Character(CharacterToken { display_name: "STAR", token: '*' });
+
 impl From<char> for Tokens {
     fn from(value: char) -> Self {
         match value {
@@ -91,6 +93,12 @@ impl From<char> for Tokens {
             '{' => TOKEN_LEFT_BRACE,
             '}' => TOKEN_RIGHT_BRACE,
             '\n' => TOKEN_NL,
+            ',' => TOKEN_COMMA,
+            '.' => TOKEN_DOT,
+            '-' => TOKEN_DASH,
+            '+' => TOKEN_PLUS,
+            ';' => TOKEN_SEMI_COLON,
+            '*' => TOKEN_STAR,
             _ => TOKEN_EOF,
         }
     }
@@ -99,11 +107,7 @@ impl From<char> for Tokens {
 impl Display for Tokens {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Tokens::LeftParen(t) => write!(f, "{} {}", t.display_name, t.token),
-            Tokens::RightParen(t) => write!(f, "{} {}", t.display_name, t.token),
-            Tokens::LeftBrace(t) => write!(f, "{} {}", t.display_name, t.token),
-            Tokens::RightBrace(t) => write!(f, "{} {}", t.display_name, t.token),
-            Tokens::NewLine(t) => write!(f, "{} {}", t.display_name, t.token),
+            Tokens::Character(t) => write!(f, "{} {}", t.display_name, t.token),
             Tokens::Eof(s) => write!(f, "{} ", s),
         }
     }
