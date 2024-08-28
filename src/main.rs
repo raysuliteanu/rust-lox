@@ -1,91 +1,196 @@
 use std::env;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
-use std::io::{self, Write};
+use std::process::ExitCode;
 
-fn main() {
+fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        writeln!(io::stderr(), "Usage: {} tokenize <filename>", args[0]).unwrap();
-        return;
+        eprintln!("Usage: {} tokenize <filename>", args[0]);
+        return ExitCode::FAILURE;
     }
 
     let command = &args[1];
     let filename = &args[2];
 
+    let mut scanner = Scanner::new();
+
     match command.as_str() {
         "tokenize" => {
             let file_contents = fs::read_to_string(filename).unwrap_or_else(|_| {
-                writeln!(io::stderr(), "Failed to read file {}", filename).unwrap();
+                eprintln!("Failed to read file {}", filename);
                 String::new()
             });
 
-            let mut scanner = Scanner::default();
-
             if !file_contents.is_empty() {
                 for c in file_contents.chars() {
-                    writeln!(io::stderr(), "scanned '{}'", c).unwrap();
-                    scanner.add_token(c.into());
+                    scanner.add_char(c);
                 }
             }
 
-            scanner.add_token(TOKEN_EOF);
+            scanner.eof();
 
             println!("{scanner}");
-
         }
         _ => {
-            writeln!(io::stderr(), "Unknown command: {}", command).unwrap();
+            eprintln!("Unknown command: {}", command);
         }
     }
+
+    if scanner.is_err() {
+        return ExitCode::from(65);
+    }
+
+    ExitCode::SUCCESS
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Scanner {
-    tokens: Vec<Tokens>,
+    tokens: Vec<TokenEntry>,
+    cur_row: usize,
+    cur_col: usize,
 }
 
 impl Scanner {
-    fn add_token(&mut self, t: Tokens) {
-        self.tokens.push(t);
+    fn new() -> Self {
+        Scanner {
+            tokens: vec![],
+            cur_row: 1,
+            cur_col: 0,
+        }
+    }
+
+    fn eof(&mut self) {
+        self.tokens.push(TokenEntry {
+            token: TOKEN_EOF,
+            coord: Coordinate {
+                row: self.cur_row + 1,
+                col: 0,
+            },
+        });
+    }
+
+    fn add_char(&mut self, c: char) {
+        let token = c.into();
+
+        if c == '\n' {
+            self.cur_row += 1;
+            self.cur_col = 0;
+        } else {
+            self.cur_col += 1;
+        }
+
+        let coord = Coordinate {
+            row: self.cur_row,
+            col: self.cur_col,
+        };
+
+        self.tokens.push(TokenEntry { 
+            token, 
+            coord, 
+        });
+    }
+
+    fn is_err(&self) -> bool {
+        self.tokens
+            .iter()
+            .any(|entry| matches!(entry.token, Token::Invalid(_)))
     }
 }
 
 impl Display for Scanner {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.tokens.iter()
-            .map(|t| format!("{} null", t.to_string()))
-            .collect::<Vec<String>>()
-            .join("\n"), f)
+        std::fmt::Display::fmt(
+            &self
+                .tokens
+                .iter()
+                .filter_map(|t| match t.token {
+                    TOKEN_NL => None,
+                    Token::Invalid(c) => {
+                        eprintln!("[line {}] Error: Unexpected character: {}", t.coord.row, c);
+                        None
+                    }
+                    _ => Some(format!("{} null", t.token)),
+                })
+                .collect::<Vec<String>>()
+                .join("\n"),
+            f,
+        )
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
+struct TokenEntry {
+    token: Token,
+    coord: Coordinate,
+}
+
+#[derive(Debug, PartialEq)]
+struct Coordinate {
+    row: usize,
+    col: usize,
+}
+
+#[derive(Debug, PartialEq)]
 struct CharacterToken {
     display_name: &'static str,
     token: char,
 }
 
-#[derive(Debug)]
-enum Tokens {
+#[derive(Debug, PartialEq)]
+enum Token {
     Character(CharacterToken),
+    Invalid(char),
     Eof(&'static str),
 }
 
-const TOKEN_EOF: Tokens = Tokens::Eof("EOF");
-const TOKEN_LEFT_PAREN: Tokens = Tokens::Character(CharacterToken { display_name: "LEFT_PAREN", token: '(' });
-const TOKEN_RIGHT_PAREN: Tokens = Tokens::Character(CharacterToken { display_name: "RIGHT_PAREN", token: ')' });
-const TOKEN_LEFT_BRACE: Tokens = Tokens::Character(CharacterToken { display_name: "LEFT_BRACE", token: '{' });
-const TOKEN_RIGHT_BRACE: Tokens = Tokens::Character(CharacterToken { display_name: "RIGHT_BRACE", token: '}' });
-const TOKEN_NL: Tokens = Tokens::Character(CharacterToken { display_name: "NL", token: '\n' });
-const TOKEN_COMMA: Tokens = Tokens::Character(CharacterToken { display_name: "COMMA", token: ',' });
-const TOKEN_DOT: Tokens = Tokens::Character(CharacterToken { display_name: "DOT", token: '.' });
-const TOKEN_DASH: Tokens = Tokens::Character(CharacterToken { display_name: "MINUS", token: '-' });
-const TOKEN_PLUS: Tokens = Tokens::Character(CharacterToken { display_name: "PLUS", token: '+' });
-const TOKEN_SEMI_COLON: Tokens = Tokens::Character(CharacterToken { display_name: "SEMICOLON", token: ';' });
-const TOKEN_STAR: Tokens = Tokens::Character(CharacterToken { display_name: "STAR", token: '*' });
+const TOKEN_EOF: Token = Token::Eof("EOF");
+const TOKEN_LEFT_PAREN: Token = Token::Character(CharacterToken {
+    display_name: "LEFT_PAREN",
+    token: '(',
+});
+const TOKEN_RIGHT_PAREN: Token = Token::Character(CharacterToken {
+    display_name: "RIGHT_PAREN",
+    token: ')',
+});
+const TOKEN_LEFT_BRACE: Token = Token::Character(CharacterToken {
+    display_name: "LEFT_BRACE",
+    token: '{',
+});
+const TOKEN_RIGHT_BRACE: Token = Token::Character(CharacterToken {
+    display_name: "RIGHT_BRACE",
+    token: '}',
+});
+const TOKEN_NL: Token = Token::Character(CharacterToken {
+    display_name: "NL",
+    token: '\n',
+});
+const TOKEN_COMMA: Token = Token::Character(CharacterToken {
+    display_name: "COMMA",
+    token: ',',
+});
+const TOKEN_DOT: Token = Token::Character(CharacterToken {
+    display_name: "DOT",
+    token: '.',
+});
+const TOKEN_DASH: Token = Token::Character(CharacterToken {
+    display_name: "MINUS",
+    token: '-',
+});
+const TOKEN_PLUS: Token = Token::Character(CharacterToken {
+    display_name: "PLUS",
+    token: '+',
+});
+const TOKEN_SEMI_COLON: Token = Token::Character(CharacterToken {
+    display_name: "SEMICOLON",
+    token: ';',
+});
+const TOKEN_STAR: Token = Token::Character(CharacterToken {
+    display_name: "STAR",
+    token: '*',
+});
 
-impl From<char> for Tokens {
+impl From<char> for Token {
     fn from(value: char) -> Self {
         match value {
             '(' => TOKEN_LEFT_PAREN,
@@ -99,16 +204,17 @@ impl From<char> for Tokens {
             '+' => TOKEN_PLUS,
             ';' => TOKEN_SEMI_COLON,
             '*' => TOKEN_STAR,
-            _ => TOKEN_EOF,
+            _ => Token::Invalid(value),
         }
     }
 }
 
-impl Display for Tokens {
+impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Tokens::Character(t) => write!(f, "{} {}", t.display_name, t.token),
-            Tokens::Eof(s) => write!(f, "{} ", s),
+            Token::Character(t) => write!(f, "{} {}", t.display_name, t.token),
+            Token::Invalid(c) => write!(f, "{}", c), // shouldn't happen
+            Token::Eof(s) => write!(f, "{} ", s),
         }
     }
 }
