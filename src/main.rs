@@ -1,7 +1,8 @@
-use std::env;
 use std::fmt::{Debug, Display, Formatter};
-use std::fs;
+use std::fs::File;
+use std::io::{stderr, BufReader, Read, Write};
 use std::process::ExitCode;
+use std::{env, io, str};
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
@@ -11,34 +12,19 @@ fn main() -> ExitCode {
     }
 
     let command = &args[1];
-    let filename = &args[2];
-
-    let mut scanner = Scanner::new();
-
-    match command.as_str() {
-        "tokenize" => {
-            let file_contents = fs::read_to_string(filename).unwrap_or_else(|_| {
-                eprintln!("Failed to read file {}", filename);
-                String::new()
-            });
-
-            if !file_contents.is_empty() {
-                for c in file_contents.chars() {
-                    scanner.add_char(c);
-                }
-            }
-
-            scanner.eof();
-
-            println!("{scanner}");
-        }
-        _ => {
-            eprintln!("Unknown command: {}", command);
-        }
+    if command != "tokenize" {
+        eprintln!("Unknown command: {}", command);
+        return ExitCode::FAILURE;
     }
 
-    if scanner.is_err() {
-        return ExitCode::from(65);
+    if let Ok(mut scanner) = Scanner::new(&args[2]) {
+        let _ = scanner.scan();
+
+        println!("{scanner}");
+
+        if scanner.is_err() {
+            return ExitCode::from(65);
+        }
     }
 
     ExitCode::SUCCESS
@@ -49,15 +35,20 @@ struct Scanner {
     tokens: Vec<TokenEntry>,
     cur_row: usize,
     cur_col: usize,
+    file: File,
+    source: Vec<char>,
 }
 
 impl Scanner {
-    fn new() -> Self {
-        Scanner {
+    fn new(filename: &String) -> io::Result<Self> {
+        let file = File::open(filename)?;
+        Ok(Scanner {
             tokens: vec![],
             cur_row: 1,
             cur_col: 0,
-        }
+            file,
+            source: vec![],
+        })
     }
 
     fn eof(&mut self) {
@@ -70,31 +61,68 @@ impl Scanner {
         });
     }
 
-    fn add_char(&mut self, c: char) {
-        let token = c.into();
-
-        if c == '\n' {
-            self.cur_row += 1;
-            self.cur_col = 0;
-        } else {
-            self.cur_col += 1;
-        }
-
-        let coord = Coordinate {
-            row: self.cur_row,
-            col: self.cur_col,
-        };
-
-        self.tokens.push(TokenEntry { 
-            token, 
-            coord, 
-        });
-    }
-
     fn is_err(&self) -> bool {
         self.tokens
             .iter()
             .any(|entry| matches!(entry.token, Token::Invalid(_)))
+    }
+
+    fn process_char(cur: char, reader: &mut CharReader) -> Token {
+        match cur {
+            '=' => {
+                if let Some('=') = reader.peek() {
+                    assert_eq!('=', reader.read().unwrap());
+                    TOKEN_EQUALS_EQUALS
+                } else {
+                    TOKEN_EQUALS
+                }
+            }
+            '(' => TOKEN_LEFT_PAREN,
+            ')' => TOKEN_RIGHT_PAREN,
+            '{' => TOKEN_LEFT_BRACE,
+            '}' => TOKEN_RIGHT_BRACE,
+            '\n' => TOKEN_NL,
+            ',' => TOKEN_COMMA,
+            '.' => TOKEN_DOT,
+            '-' => TOKEN_DASH,
+            '+' => TOKEN_PLUS,
+            ';' => TOKEN_SEMI_COLON,
+            '*' => TOKEN_STAR,
+            _ => Token::Invalid(cur.to_string()),
+        }
+    }
+
+    fn scan(&mut self) -> io::Result<&Self> {
+        let mut reader = CharReader::new(&self.file);
+        while let Some(c) = reader.read() {
+            let token = Scanner::process_char(c, &mut reader);
+
+            match token {
+                TOKEN_EQUALS_EQUALS => {
+                    self.cur_col += 2;
+                }
+                TOKEN_NL => {
+                    self.cur_row += 1;
+                    self.cur_col = 0;
+                }
+                _ => {
+                    self.cur_col += 1;
+                }
+            }
+
+            let coord = Coordinate {
+                row: self.cur_row,
+                col: self.cur_col,
+            };
+
+            self.tokens.push(TokenEntry { token, coord });
+        }
+
+        self.source.extend_from_slice(&reader.to_vec()[..]);
+
+        self.eof();
+
+        Ok(self)
     }
 }
 
@@ -104,10 +132,15 @@ impl Display for Scanner {
             &self
                 .tokens
                 .iter()
-                .filter_map(|t| match t.token {
-                    TOKEN_NL => None,
+                .filter_map(|t| match &t.token {
+                    &TOKEN_NL => None,
                     Token::Invalid(c) => {
-                        eprintln!("[line {}] Error: Unexpected character: {}", t.coord.row, c);
+                        stderr()
+                            .write_fmt(format_args!(
+                                "[line {}] Error: Unexpected character: {}\n",
+                                t.coord.row, c
+                            ))
+                            .expect("failed to write to stderr");
                         None
                     }
                     _ => Some(format!("{} null", t.token)),
@@ -138,9 +171,16 @@ struct CharacterToken {
 }
 
 #[derive(Debug, PartialEq)]
+struct MultiCharToken {
+    display_name: &'static str,
+    token: &'static str,
+}
+
+#[derive(Debug, PartialEq)]
 enum Token {
     Character(CharacterToken),
-    Invalid(char),
+    MultiChar(MultiCharToken),
+    Invalid(String),
     Eof(&'static str),
 }
 
@@ -189,6 +229,14 @@ const TOKEN_STAR: Token = Token::Character(CharacterToken {
     display_name: "STAR",
     token: '*',
 });
+const TOKEN_EQUALS: Token = Token::Character(CharacterToken {
+    display_name: "EQUAL",
+    token: '=',
+});
+const TOKEN_EQUALS_EQUALS: Token = Token::MultiChar(MultiCharToken {
+    display_name: "EQUAL_EQUAL",
+    token: "==",
+});
 
 impl From<char> for Token {
     fn from(value: char) -> Self {
@@ -204,7 +252,17 @@ impl From<char> for Token {
             '+' => TOKEN_PLUS,
             ';' => TOKEN_SEMI_COLON,
             '*' => TOKEN_STAR,
-            _ => Token::Invalid(value),
+            '=' => TOKEN_EQUALS,
+            _ => Token::Invalid(value.to_string()),
+        }
+    }
+}
+
+impl From<&str> for Token {
+    fn from(value: &str) -> Self {
+        match value {
+            "==" => TOKEN_EQUALS,
+            _ => Token::Invalid(value.to_string()),
         }
     }
 }
@@ -213,8 +271,65 @@ impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Token::Character(t) => write!(f, "{} {}", t.display_name, t.token),
+            Token::MultiChar(t) => write!(f, "{} {}", t.display_name, t.token),
             Token::Invalid(c) => write!(f, "{}", c), // shouldn't happen
             Token::Eof(s) => write!(f, "{} ", s),
+        }
+    }
+}
+
+struct CharReader<'a> {
+    reader: BufReader<&'a File>,
+    buffer: Vec<char>,
+    offset: usize,
+}
+
+impl<'a> CharReader<'a> {
+    fn new(file: &'a File) -> Self {
+        CharReader {
+            reader: BufReader::new(file),
+            buffer: vec![],
+            offset: 0,
+        }
+    }
+
+    fn read(&mut self) -> Option<char> {
+        if self.offset >= self.buffer.len() {
+            self.expand_buffer();
+        }
+
+        if self.offset >= self.buffer.len() {
+            None
+        } else {
+            let c = self.buffer[self.offset];
+            self.offset += 1;
+            Some(c)
+        }
+    }
+
+    fn peek(&mut self) -> Option<char> {
+        if self.offset >= self.buffer.len() {
+            self.expand_buffer();
+        }
+
+        if self.offset>= self.buffer.len() {
+            None
+        } else {
+            Some(self.buffer[self.offset])
+        }
+    }
+
+    fn to_vec(&self) -> Vec<char> {
+        self.buffer.to_vec()
+    }
+
+    fn expand_buffer(&mut self) {
+        let mut buf = [0u8; 4096];
+        match self.reader.read(&mut buf) {
+            Ok(n) => {
+                str::from_utf8(&buf[..n]).ok().iter().flat_map(|s| s.chars()).for_each(|c| self.buffer.push(c));
+            }
+            _ => {}
         }
     }
 }
