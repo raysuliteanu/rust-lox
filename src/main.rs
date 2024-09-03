@@ -241,6 +241,7 @@ struct MultiCharToken {
 }
 
 impl MultiCharToken {
+    #[allow(dead_code)]
     fn token_len(&self) -> usize {
         self.token.len()
     }
