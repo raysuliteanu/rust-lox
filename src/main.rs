@@ -69,6 +69,22 @@ impl Scanner {
 
     fn process_char(cur: char, reader: &mut CharReader) -> Token {
         match cur {
+            '>' => {
+                if let Some('=') = reader.peek() {
+                    assert_eq!('=', reader.read().unwrap());
+                    TOKEN_GREATER_EQ
+                } else {
+                    TOKEN_GREATER
+                }
+            }
+            '<' => {
+                if let Some('=') = reader.peek() {
+                    assert_eq!('=', reader.read().unwrap());
+                    TOKEN_LESS_EQ
+                } else {
+                    TOKEN_LESS
+                }
+            }
             '=' => {
                 if let Some('=') = reader.peek() {
                     assert_eq!('=', reader.read().unwrap());
@@ -252,6 +268,22 @@ const TOKEN_BANG_EQ: Token = Token::MultiChar(MultiCharToken {
     display_name: "BANG_EQUAL",
     token: "!=",
 });
+const TOKEN_LESS: Token = Token::Character(CharacterToken {
+    display_name: "LESS",
+    token: '<',
+});
+const TOKEN_LESS_EQ: Token = Token::MultiChar(MultiCharToken {
+    display_name: "LESS_EQUAL",
+    token: "<=",
+});
+const TOKEN_GREATER: Token = Token::Character(CharacterToken {
+    display_name: "GREATER",
+    token: '>',
+});
+const TOKEN_GREATER_EQ: Token = Token::MultiChar(MultiCharToken {
+    display_name: "GREATER_EQUAL",
+    token: ">=",
+});
 
 impl From<char> for Token {
     fn from(value: char) -> Self {
@@ -269,6 +301,8 @@ impl From<char> for Token {
             '*' => TOKEN_STAR,
             '=' => TOKEN_EQ,
             '!' => TOKEN_BANG,
+            '<' => TOKEN_LESS,
+            '>' => TOKEN_GREATER,
             _ => Token::Invalid(value.to_string()),
         }
     }
@@ -279,6 +313,8 @@ impl From<&str> for Token {
         match value {
             "==" => TOKEN_EQ,
             "!=" => TOKEN_BANG_EQ,
+            "<=" => TOKEN_LESS_EQ,
+            ">=" => TOKEN_GREATER_EQ,
             _ => Token::Invalid(value.to_string()),
         }
     }
