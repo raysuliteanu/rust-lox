@@ -72,7 +72,7 @@ impl Scanner {
             '\n' => {
                 // handle Windows style EOL '\n\r'
                 if let Some('\r') = reader.peek() {
-                    assert_eq!('\r', reader.read().unwrap());
+                    assert_eq!('\r', reader.read().unwrap().1);
                 }
                 Some(TOKEN_NL)
             }
@@ -81,7 +81,7 @@ impl Scanner {
                 // handle comment '//...\n'
                 if let Some('/') = reader.peek() {
                     // eat 2nd '/'
-                    assert_eq!('/', reader.read().unwrap());
+                    assert_eq!('/', reader.read().unwrap().1);
 
                     loop {
                         let peek = reader.peek();
@@ -101,7 +101,7 @@ impl Scanner {
             }
             '>' => {
                 if let Some('=') = reader.peek() {
-                    assert_eq!('=', reader.read().unwrap());
+                    assert_eq!('=', reader.read().unwrap().1);
                     Some(TOKEN_GREATER_EQ)
                 } else {
                     Some(TOKEN_GREATER)
@@ -109,7 +109,7 @@ impl Scanner {
             }
             '<' => {
                 if let Some('=') = reader.peek() {
-                    assert_eq!('=', reader.read().unwrap());
+                    assert_eq!('=', reader.read().unwrap().1);
                     Some(TOKEN_LESS_EQ)
                 } else {
                     Some(TOKEN_LESS)
@@ -117,7 +117,7 @@ impl Scanner {
             }
             '=' => {
                 if let Some('=') = reader.peek() {
-                    assert_eq!('=', reader.read().unwrap());
+                    assert_eq!('=', reader.read().unwrap().1);
                     Some(TOKEN_EQ_EQ)
                 } else {
                     Some(TOKEN_EQ)
@@ -125,7 +125,7 @@ impl Scanner {
             }
             '!' => {
                 if let Some('=') = reader.peek() {
-                    assert_eq!('=', reader.read().unwrap());
+                    assert_eq!('=', reader.read().unwrap().1);
                     Some(TOKEN_BANG_EQ)
                 } else {
                     Some(TOKEN_BANG)
@@ -147,27 +147,14 @@ impl Scanner {
 
     fn scan(&mut self) -> io::Result<&Self> {
         let mut reader = CharReader::new(&self.file);
-        while let Some(c) = reader.read() {
+        while let Some((i, c)) = reader.read() {
             let token = Scanner::process_char(c, &mut reader);
 
             if let Some(token) = token {
-                self.cur_col += 1;
-                match token {
-                    TOKEN_NL => {
-                        self.cur_row += 1;
-                        self.cur_col = 0;
-                    }
-                    Token::MultiChar(_) => {
-                        // what if the str is more than 2 chars in len
-                        // the token_len() function used here causes borrow issues :(
-                        self.cur_col += 1;
-                    }
-                    _ => {}
-                }
-
+                self.cur_col = i;
                 match token {
                     TOKEN_WS => {
-                        // do nothing
+                        // ignore WS
                     }
                     _ => {
                         self.tokens.push(TokenEntry {
@@ -178,6 +165,10 @@ impl Scanner {
                             },
                         });
                     }
+                }
+
+                if c == '\n' {
+                    self.cur_row += 1;
                 }
             }
         }
@@ -403,7 +394,7 @@ impl<'a> CharReader<'a> {
         }
     }
 
-    fn read(&mut self) -> Option<char> {
+    fn read(&mut self) -> Option<(usize, char)> {
         if self.offset >= self.buffer.len() {
             self.expand_buffer();
         }
@@ -412,8 +403,9 @@ impl<'a> CharReader<'a> {
             None
         } else {
             let c = self.buffer[self.offset];
+            let res = (self.offset, c);
             self.offset += 1;
-            Some(c)
+            Some(res)
         }
     }
 
