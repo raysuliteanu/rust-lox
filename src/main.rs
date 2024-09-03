@@ -72,9 +72,17 @@ impl Scanner {
             '=' => {
                 if let Some('=') = reader.peek() {
                     assert_eq!('=', reader.read().unwrap());
-                    TOKEN_EQUALS_EQUALS
+                    TOKEN_EQ_EQ
                 } else {
-                    TOKEN_EQUALS
+                    TOKEN_EQ
+                }
+            }
+            '!' => {
+                if let Some('=') = reader.peek() {
+                    assert_eq!('=', reader.read().unwrap());
+                    TOKEN_BANG_EQ
+                } else {
+                    TOKEN_BANG
                 }
             }
             '(' => TOKEN_LEFT_PAREN,
@@ -96,18 +104,17 @@ impl Scanner {
         let mut reader = CharReader::new(&self.file);
         while let Some(c) = reader.read() {
             let token = Scanner::process_char(c, &mut reader);
+            self.cur_col += 1;
 
             match token {
-                TOKEN_EQUALS_EQUALS => {
-                    self.cur_col += 2;
+                Token::MultiChar(_) => {
+                    self.cur_col += 1;
                 }
                 TOKEN_NL => {
                     self.cur_row += 1;
                     self.cur_col = 0;
                 }
-                _ => {
-                    self.cur_col += 1;
-                }
+                _ => {}
             }
 
             let coord = Coordinate {
@@ -229,13 +236,21 @@ const TOKEN_STAR: Token = Token::Character(CharacterToken {
     display_name: "STAR",
     token: '*',
 });
-const TOKEN_EQUALS: Token = Token::Character(CharacterToken {
+const TOKEN_EQ: Token = Token::Character(CharacterToken {
     display_name: "EQUAL",
     token: '=',
 });
-const TOKEN_EQUALS_EQUALS: Token = Token::MultiChar(MultiCharToken {
+const TOKEN_EQ_EQ: Token = Token::MultiChar(MultiCharToken {
     display_name: "EQUAL_EQUAL",
     token: "==",
+});
+const TOKEN_BANG: Token = Token::Character(CharacterToken {
+    display_name: "BANG",
+    token: '!',
+});
+const TOKEN_BANG_EQ: Token = Token::MultiChar(MultiCharToken {
+    display_name: "BANG_EQUAL",
+    token: "!=",
 });
 
 impl From<char> for Token {
@@ -252,7 +267,8 @@ impl From<char> for Token {
             '+' => TOKEN_PLUS,
             ';' => TOKEN_SEMI_COLON,
             '*' => TOKEN_STAR,
-            '=' => TOKEN_EQUALS,
+            '=' => TOKEN_EQ,
+            '!' => TOKEN_BANG,
             _ => Token::Invalid(value.to_string()),
         }
     }
@@ -261,7 +277,8 @@ impl From<char> for Token {
 impl From<&str> for Token {
     fn from(value: &str) -> Self {
         match value {
-            "==" => TOKEN_EQUALS,
+            "==" => TOKEN_EQ,
+            "!=" => TOKEN_BANG_EQ,
             _ => Token::Invalid(value.to_string()),
         }
     }
@@ -307,12 +324,13 @@ impl<'a> CharReader<'a> {
         }
     }
 
+    /// look at the current char without consuming it
     fn peek(&mut self) -> Option<char> {
         if self.offset >= self.buffer.len() {
             self.expand_buffer();
         }
 
-        if self.offset>= self.buffer.len() {
+        if self.offset >= self.buffer.len() {
             None
         } else {
             Some(self.buffer[self.offset])
@@ -325,11 +343,12 @@ impl<'a> CharReader<'a> {
 
     fn expand_buffer(&mut self) {
         let mut buf = [0u8; 4096];
-        match self.reader.read(&mut buf) {
-            Ok(n) => {
-                str::from_utf8(&buf[..n]).ok().iter().flat_map(|s| s.chars()).for_each(|c| self.buffer.push(c));
-            }
-            _ => {}
+        if let Ok(n) = self.reader.read(&mut buf) {
+            str::from_utf8(&buf[..n])
+                .ok()
+                .iter()
+                .flat_map(|s| s.chars())
+                .for_each(|c| self.buffer.push(c));
         }
     }
 }
