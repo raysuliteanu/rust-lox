@@ -67,52 +67,81 @@ impl Scanner {
             .any(|entry| matches!(entry.token, Token::Invalid(_)))
     }
 
-    fn process_char(cur: char, reader: &mut CharReader) -> Token {
+    fn process_char(cur: char, reader: &mut CharReader) -> Option<Token> {
         match cur {
+            '\n' => {
+                // handle Windows style EOL '\n\r'
+                if let Some('\r') = reader.peek() {
+                    assert_eq!('\r', reader.read().unwrap());
+                }
+                Some(TOKEN_NL)
+            }
+            c if c.is_whitespace() => Some(TOKEN_WS),
+            '/' => {
+                // handle comment '//...\n'
+                if let Some('/') = reader.peek() {
+                    // eat 2nd '/'
+                    assert_eq!('/', reader.read().unwrap());
+
+                    loop {
+                        let peek = reader.peek();
+                        match peek {
+                            Some('\n') => {
+                                return Some(TOKEN_NL);
+                            }
+                            Some(_) => {
+                                let _ = reader.read();
+                            }
+                            None => return None,
+                        }
+                    }
+                } else {
+                    Some(TOKEN_SLASH)
+                }
+            }
             '>' => {
                 if let Some('=') = reader.peek() {
                     assert_eq!('=', reader.read().unwrap());
-                    TOKEN_GREATER_EQ
+                    Some(TOKEN_GREATER_EQ)
                 } else {
-                    TOKEN_GREATER
+                    Some(TOKEN_GREATER)
                 }
             }
             '<' => {
                 if let Some('=') = reader.peek() {
                     assert_eq!('=', reader.read().unwrap());
-                    TOKEN_LESS_EQ
+                    Some(TOKEN_LESS_EQ)
                 } else {
-                    TOKEN_LESS
+                    Some(TOKEN_LESS)
                 }
             }
             '=' => {
                 if let Some('=') = reader.peek() {
                     assert_eq!('=', reader.read().unwrap());
-                    TOKEN_EQ_EQ
+                    Some(TOKEN_EQ_EQ)
                 } else {
-                    TOKEN_EQ
+                    Some(TOKEN_EQ)
                 }
             }
             '!' => {
                 if let Some('=') = reader.peek() {
                     assert_eq!('=', reader.read().unwrap());
-                    TOKEN_BANG_EQ
+                    Some(TOKEN_BANG_EQ)
                 } else {
-                    TOKEN_BANG
+                    Some(TOKEN_BANG)
                 }
             }
-            '(' => TOKEN_LEFT_PAREN,
-            ')' => TOKEN_RIGHT_PAREN,
-            '{' => TOKEN_LEFT_BRACE,
-            '}' => TOKEN_RIGHT_BRACE,
-            '\n' => TOKEN_NL,
-            ',' => TOKEN_COMMA,
-            '.' => TOKEN_DOT,
-            '-' => TOKEN_DASH,
-            '+' => TOKEN_PLUS,
-            ';' => TOKEN_SEMI_COLON,
-            '*' => TOKEN_STAR,
-            _ => Token::Invalid(cur.to_string()),
+            '(' => Some(TOKEN_LEFT_PAREN),
+            ')' => Some(TOKEN_RIGHT_PAREN),
+            '{' => Some(TOKEN_LEFT_BRACE),
+            '}' => Some(TOKEN_RIGHT_BRACE),
+            ',' => Some(TOKEN_COMMA),
+            '.' => Some(TOKEN_DOT),
+            '-' => Some(TOKEN_DASH),
+            '+' => Some(TOKEN_PLUS),
+            ';' => Some(TOKEN_SEMI_COLON),
+            '*' => Some(TOKEN_STAR),
+            _ => Some(Token::Invalid(cur.to_string())),
         }
     }
 
@@ -120,25 +149,37 @@ impl Scanner {
         let mut reader = CharReader::new(&self.file);
         while let Some(c) = reader.read() {
             let token = Scanner::process_char(c, &mut reader);
-            self.cur_col += 1;
 
-            match token {
-                Token::MultiChar(_) => {
-                    self.cur_col += 1;
+            if let Some(token) = token {
+                self.cur_col += 1;
+                match token {
+                    TOKEN_NL => {
+                        self.cur_row += 1;
+                        self.cur_col = 0;
+                    }
+                    Token::MultiChar(_) => {
+                        // what if the str is more than 2 chars in len
+                        // the token_len() function used here causes borrow issues :(
+                        self.cur_col += 1;
+                    }
+                    _ => {}
                 }
-                TOKEN_NL => {
-                    self.cur_row += 1;
-                    self.cur_col = 0;
+
+                match token {
+                    TOKEN_WS => {
+                        // do nothing
+                    }
+                    _ => {
+                        self.tokens.push(TokenEntry {
+                            token,
+                            coord: Coordinate {
+                                row: self.cur_row,
+                                col: self.cur_col,
+                            },
+                        });
+                    }
                 }
-                _ => {}
             }
-
-            let coord = Coordinate {
-                row: self.cur_row,
-                col: self.cur_col,
-            };
-
-            self.tokens.push(TokenEntry { token, coord });
         }
 
         self.source.extend_from_slice(&reader.to_vec()[..]);
@@ -197,6 +238,12 @@ struct CharacterToken {
 struct MultiCharToken {
     display_name: &'static str,
     token: &'static str,
+}
+
+impl MultiCharToken {
+    fn token_len(&self) -> usize {
+        self.token.len()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -284,6 +331,14 @@ const TOKEN_GREATER_EQ: Token = Token::MultiChar(MultiCharToken {
     display_name: "GREATER_EQUAL",
     token: ">=",
 });
+const TOKEN_SLASH: Token = Token::Character(CharacterToken {
+    display_name: "SLASH",
+    token: '/',
+});
+const TOKEN_WS: Token = Token::Character(CharacterToken {
+    display_name: "WS",
+    token: ' ',
+});
 
 impl From<char> for Token {
     fn from(value: char) -> Self {
@@ -303,6 +358,7 @@ impl From<char> for Token {
             '!' => TOKEN_BANG,
             '<' => TOKEN_LESS,
             '>' => TOKEN_GREATER,
+            '/' => TOKEN_SLASH,
             _ => Token::Invalid(value.to_string()),
         }
     }
