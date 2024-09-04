@@ -1,7 +1,7 @@
 use crate::token;
 use crate::token::LiteralToken;
 use crate::token::LiteralToken::{Bang, BangEq, Eq, EqEq, Greater, GreaterEq, Less, LessEq};
-use anyhow::{anyhow, Error};
+use anyhow::Error;
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read};
@@ -36,10 +36,16 @@ impl Scanner {
         while let Some(token) = self.next() {
             match token {
                 Ok(t) => {
+                    println!("{t}");
                     self.tokens.push(t);
                 }
                 Err(e) => {
-                    eprintln!("[Line: {}] {}", 0, e); // todo
+                    if let Some(LexerError::InvalidToken { line, token }) =
+                        e.downcast_ref::<LexerError>()
+                    {
+                        eprintln!("[line: {}] {}", line, token);
+                        continue;
+                    }
                     return Err(e);
                 }
             }
@@ -48,6 +54,10 @@ impl Scanner {
         eprintln!("EOF  null");
 
         Ok(())
+    }
+
+    fn current_line(&self) -> usize {
+        self.source[..self.next_char_idx].lines().count()
     }
 }
 
@@ -62,7 +72,13 @@ impl Iterator for Scanner {
         }
 
         loop {
-            let (i, c) = self.source.trim_start().char_indices().next()?;
+            let (i, c) = self.source.char_indices().nth(self.next_char_idx)?;
+
+            self.next_char_idx = i + 1;
+
+            if c.is_whitespace() {
+                continue;
+            }
 
             let t = match c {
                 '(' => return Some(Ok(Token::Literal(LiteralToken::LeftParen))),
@@ -75,20 +91,28 @@ impl Iterator for Scanner {
                 '+' => return Some(Ok(Token::Literal(LiteralToken::Plus))),
                 ';' => return Some(Ok(Token::Literal(LiteralToken::SemiColon))),
                 '*' => return Some(Ok(Token::Literal(LiteralToken::Star))),
-                '"' => todo!(),
+                '"' => StartOfToken::StringLiteral,
                 '/' => StartOfToken::SlashOrComment,
                 '>' => StartOfToken::OpOrEqual(GreaterEq, Greater),
                 '<' => StartOfToken::OpOrEqual(LessEq, Less),
                 '=' => StartOfToken::OpOrEqual(EqEq, Eq),
                 '!' => StartOfToken::OpOrEqual(BangEq, Bang),
                 c if c.is_whitespace() => continue,
-                _ => return Some(Err(anyhow!("Unexpected character '{}'", c))),
+                _ => {
+                    let e = LexerError::InvalidToken {
+                        line: self.current_line(),
+                        token: c,
+                    };
+                    return Some(Err(e.into()));
+                }
             };
 
             match t {
                 StartOfToken::StringLiteral => todo!("string literal"),
                 StartOfToken::SlashOrComment => {
-                    let (i, c) = self.source.char_indices().next()?;
+                    let (i, c) = self.source.char_indices().nth(self.next_char_idx)?;
+                    self.next_char_idx = i + 1;
+
                     if c == '/' {
                         todo!("eat comment")
                     } else {
@@ -96,8 +120,10 @@ impl Iterator for Scanner {
                     };
                 }
                 StartOfToken::OpOrEqual(l, r) => {
-                    let (i, c) = self.source.trim_start().char_indices().next()?;
+                    let (i, c) = self.source.char_indices().nth(self.next_char_idx)?;
+
                     return if c == '=' {
+                        self.next_char_idx = i + 1;
                         Some(Ok(Token::Literal(l)))
                     } else {
                         Some(Ok(Token::Literal(r)))
@@ -106,4 +132,10 @@ impl Iterator for Scanner {
             }
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+enum LexerError {
+    #[error("Invalid character: {token}")]
+    InvalidToken { line: usize, token: char },
 }

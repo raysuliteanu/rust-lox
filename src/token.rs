@@ -3,14 +3,30 @@ use std::fmt::Display;
 #[derive(Debug)]
 pub enum Token {
     Keyword(KeywordToken),
-    Identifier,
     Literal(LiteralToken),
     Number(f64),
+    Identifier {
+        // index into source buffer
+        offset: usize,
+        length: usize,
+    },
     String {
         // index into source buffer
         offset: usize,
         length: usize,
     },
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Keyword(t) => todo!(),
+            Token::Literal(t) => write!(f, "{t}"),
+            Token::Number(n) => write!(f, "{n}"),
+            Token::Identifier { offset, length } => todo!(),
+            Token::String { offset, length } => todo!(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -74,8 +90,8 @@ impl Display for LiteralToken {
             LiteralToken::BangEq => write!(f, "BANG_EQUAL != null"),
             LiteralToken::Less => write!(f, "LESS < null"),
             LiteralToken::LessEq => write!(f, "LESS_EQUAL <= null"),
-            LiteralToken::Greater => write!(f, "GREATER < null"),
-            LiteralToken::GreaterEq => write!(f, "GREATER_EQUAL <= null"),
+            LiteralToken::Greater => write!(f, "GREATER > null"),
+            LiteralToken::GreaterEq => write!(f, "GREATER_EQUAL >= null"),
             LiteralToken::Slash => write!(f, "SLASH / null"),
         }
     }
