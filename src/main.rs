@@ -69,6 +69,33 @@ impl Scanner {
 
     fn process_char(cur: char, reader: &mut CharReader) -> Option<Token> {
         match cur {
+            '"' => {
+                // String literal
+                loop {
+                    let mut s = String::from(cur);
+                    if let Some((_, c)) = reader.read() {
+                        match c {
+                            '\n' => {
+                                // newline before closing '"' is invalid
+                                return Some(Token::Invalid(c.to_string()))
+                            }
+                            '"' => {
+                                s.push(c);
+                                return Some(Token::MultiChar(MultiCharToken {
+                                    display_name: "STRING",
+                                    token: "", // todo
+                                }));
+                            }
+                            _ if c.is_control() == false => {
+                                s.push(c);
+                            }
+                            _ => return Some(Token::Invalid(c.to_string()))
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
             '\n' => {
                 // handle Windows style EOL '\n\r'
                 if let Some('\r') = reader.peek() {
@@ -411,14 +438,18 @@ impl<'a> CharReader<'a> {
 
     /// look at the current char without consuming it
     fn peek(&mut self) -> Option<char> {
-        if self.offset >= self.buffer.len() {
+        self.peek_n(0)
+    }
+
+    fn peek_n(&mut self, n: usize) -> Option<char> {
+        if self.offset + n >= self.buffer.len() {
             self.expand_buffer();
         }
 
-        if self.offset >= self.buffer.len() {
+        if self.offset + n >= self.buffer.len() {
             None
         } else {
-            Some(self.buffer[self.offset])
+            Some(self.buffer[self.offset + n])
         }
     }
 
