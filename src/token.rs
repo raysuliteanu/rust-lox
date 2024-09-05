@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Token {
     Keyword(KeywordToken),
     Literal(LiteralToken),
@@ -29,7 +29,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum KeywordToken {
     And,
     Class,
@@ -48,7 +48,7 @@ pub enum KeywordToken {
     While,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum LiteralToken {
     LeftParen,
     RightParen,
@@ -82,7 +82,7 @@ impl Display for LiteralToken {
             LiteralToken::Dot => write!(f, "DOT . null"),
             LiteralToken::Dash => write!(f, "DASH - null"),
             LiteralToken::Plus => write!(f, "PLUS + null"),
-            LiteralToken::SemiColon => write!(f, "SEMI_COLON : null"),
+            LiteralToken::SemiColon => write!(f, "SEMI_COLON ; null"),
             LiteralToken::Star => write!(f, "STAR * null"),
             LiteralToken::Eq => write!(f, "EQUAL = null"),
             LiteralToken::EqEq => write!(f, "EQUAL_EQUAL == null"),

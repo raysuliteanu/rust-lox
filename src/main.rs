@@ -1,6 +1,4 @@
 use clap::{Parser, Subcommand};
-use std::fmt::{Debug, Display, Formatter};
-use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::str;
 
@@ -15,9 +13,7 @@ struct Lox {
 
 #[derive(Subcommand)]
 enum LoxCommands {
-    Tokenize {
-        filename: PathBuf,
-    },
+    Tokenize { filename: PathBuf },
 }
 
 fn main() {
@@ -26,7 +22,9 @@ fn main() {
     match &lox.commands {
         LoxCommands::Tokenize { filename } => {
             if let Ok(mut scanner) = lex::Scanner::new(filename) {
-                scanner.tokenize().unwrap_or_else(|_| std::process::exit(65));
+                scanner
+                    .tokenize()
+                    .unwrap_or_else(|_| std::process::exit(65));
             }
         }
     }
