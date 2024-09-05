@@ -11,9 +11,7 @@ pub enum Token {
         length: usize,
     },
     String {
-        // index into source buffer
-        offset: usize,
-        length: usize,
+        value: String,
     },
     Comment,
 }
@@ -24,13 +22,14 @@ impl Display for Token {
             Token::Keyword(t) => write!(f, "{t}"),
             Token::Literal(t) => write!(f, "{t}"),
             Token::Number(n) => write!(f, "{n}"),
-            Token::Identifier { offset, length } => {
-                // for the time being, so we don't panic ...
-                write!(f, "{offset}:{length}")
+            Token::Identifier {
+                offset: _,
+                length: _,
+            } => {
+                write!(f, "IDENTIFIER")
             }
-            Token::String { offset, length } => {
-                // for the time being, so we don't panic ...
-                write!(f, "{offset}:{length}")
+            Token::String { value } => {
+                write!(f, "STRING \"{value}\" {value}")
             }
             Token::Comment => {
                 // ignore

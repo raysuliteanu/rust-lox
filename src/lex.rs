@@ -58,10 +58,8 @@ impl Scanner {
                     }
                 },
                 Err(e) => {
-                    if let Some(LexerError::InvalidToken { line, token }) =
-                        e.downcast_ref::<LexerError>()
-                    {
-                        eprintln!("[line {}] Error: Unexpected character: {}", line, token);
+                    if e.downcast_ref::<LexerError>().is_some() {
+                        eprintln!("{e}");
                         self.has_tokenization_err = true;
                         continue;
                     }
@@ -136,12 +134,18 @@ impl Iterator for Scanner {
             // todo: some cleanup stll could be done here w.r.t. almost duplicate code
             return match t {
                 StartOfToken::StringLiteral => {
-                    if let Some(length) = self.source[self.next_char_idx..].find('"') {
-                        let offset = self.next_char_idx - 1;
+                    let offset = self.next_char_idx;
+                    if let Some(length) = self.source[offset..].find('"') {
                         self.next_char_idx += length + 1;
-                        Some(Ok(Token::String { offset, length }))
+                        Some(Ok(Token::String {
+                            value: String::from(&self.source[offset..offset + length]),
+                        }))
                     } else {
-                        todo!("handle error")
+                        let e = LexerError::UnterminatedString {
+                            line: self.current_line(),
+                        };
+                        self.next_char_idx = self.source.len();
+                        Some(Err(e.into()))
                     }
                 }
                 StartOfToken::SlashOrComment => {
@@ -222,8 +226,11 @@ impl Iterator for Scanner {
 
 #[derive(Debug, thiserror::Error)]
 enum LexerError {
-    #[error("Unexpected character: {token}")]
+    #[error("[line {line}] Error: Unexpected character: {token}")]
     InvalidToken { line: usize, token: char },
+
+    #[error("[line {line}] Error: Unterminated string.")]
+    UnterminatedString { line: usize },
 }
 
 #[cfg(test)]
@@ -311,8 +318,7 @@ mod test {
 
         let actual = scanner.tokens;
         let expected = vec![Token::String {
-            offset: 0,
-            length: input.len() - 2, // for the '\' escapes
+            value: "some string value".to_string(),
         }];
 
         check(actual, expected);
@@ -335,8 +341,7 @@ mod test {
             },
             Token::Literal(LiteralToken::Eq),
             Token::String {
-                offset: 8,
-                length: 17,
+                value: "some string value".to_string(),
             },
             Token::Literal(LiteralToken::SemiColon),
         ];
