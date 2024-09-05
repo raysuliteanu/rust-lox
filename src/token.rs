@@ -20,7 +20,7 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Token::Keyword(t) => todo!(),
+            Token::Keyword(t) => write!(f, "{t}"),
             Token::Literal(t) => write!(f, "{t}"),
             Token::Number(n) => write!(f, "{n}"),
             Token::Identifier { offset, length } => todo!(),
@@ -46,6 +46,28 @@ pub enum KeywordToken {
     True,
     Var,
     While,
+}
+
+impl Display for KeywordToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KeywordToken::And => write!(f, "AND and null"),
+            KeywordToken::Class => write!(f, "CLASS class null"),
+            KeywordToken::Else => write!(f, "ELSE else null"),
+            KeywordToken::False => write!(f, "FALSE false null"),
+            KeywordToken::For => write!(f, "FOR for null"),
+            KeywordToken::Fun => write!(f, "FUN fun null"),
+            KeywordToken::If => write!(f, "IF if null"),
+            KeywordToken::Nil => write!(f, "NIL nil null"),
+            KeywordToken::Or => write!(f, "OR or null"),
+            KeywordToken::Return => write!(f, "RETURN return null"),
+            KeywordToken::Super => write!(f, "SUPER super null"),
+            KeywordToken::This => write!(f, "THIS this null"),
+            KeywordToken::True => write!(f, "TRUE true null"),
+            KeywordToken::Var => write!(f, "VAR var null"),
+            KeywordToken::While => write!(f, "WHILE while null"),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]

@@ -2,6 +2,7 @@ use crate::token;
 use crate::token::LiteralToken;
 use crate::token::LiteralToken::{Bang, BangEq, Eq, EqEq, Greater, GreaterEq, Less, LessEq};
 use anyhow::Error;
+use itertools::Itertools;
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read};
@@ -77,6 +78,8 @@ impl Iterator for Scanner {
 
     fn next(&mut self) -> Option<Self::Item> {
         enum StartOfToken {
+            KeywordOrIdentifier,
+            Number,
             StringLiteral,
             SlashOrComment,
             OpOrEqual(LiteralToken, LiteralToken),
@@ -107,6 +110,8 @@ impl Iterator for Scanner {
                 '<' => StartOfToken::OpOrEqual(LessEq, Less),
                 '=' => StartOfToken::OpOrEqual(EqEq, Eq),
                 '!' => StartOfToken::OpOrEqual(BangEq, Bang),
+                c if c.is_ascii_digit() => StartOfToken::Number,
+                c if c.is_alphanumeric() || c == '_' => StartOfToken::KeywordOrIdentifier,
                 _ => {
                     let e = LexerError::InvalidToken {
                         line: self.current_line(),
@@ -144,6 +149,48 @@ impl Iterator for Scanner {
                     } else {
                         Some(Ok(Token::Literal(r)))
                     }
+                }
+                StartOfToken::KeywordOrIdentifier => {
+                    let start = dbg!(self.next_char_idx - 1);
+                    // split_once will "remove" the space if found ... neither part contains the space
+                    let word = match self.source[start..].split_once(' ') {
+                        Some((word, _)) => word,
+                        None => &self.source[start..],
+                    };
+
+                    let token = match word {
+                        "and" => Some(Ok(Token::Keyword(token::KeywordToken::And))),
+                        "class" => Some(Ok(Token::Keyword(token::KeywordToken::Class))),
+                        "else" => Some(Ok(Token::Keyword(token::KeywordToken::Else))),
+                        "false" => Some(Ok(Token::Keyword(token::KeywordToken::False))),
+                        "for" => Some(Ok(Token::Keyword(token::KeywordToken::For))),
+                        "fun" => Some(Ok(Token::Keyword(token::KeywordToken::Fun))),
+                        "if" => Some(Ok(Token::Keyword(token::KeywordToken::If))),
+                        "nil" => Some(Ok(Token::Keyword(token::KeywordToken::Nil))),
+                        "or" => Some(Ok(Token::Keyword(token::KeywordToken::Or))),
+                        "return" => Some(Ok(Token::Keyword(token::KeywordToken::Return))),
+                        "super" => Some(Ok(Token::Keyword(token::KeywordToken::Super))),
+                        "this" => Some(Ok(Token::Keyword(token::KeywordToken::This))),
+                        "true" => Some(Ok(Token::Keyword(token::KeywordToken::True))),
+                        "var" => Some(Ok(Token::Keyword(token::KeywordToken::Var))),
+                        "while" => Some(Ok(Token::Keyword(token::KeywordToken::While))),
+                        _ => Some(Ok(Token::Identifier {
+                            offset: start,
+                            length: word.len(),
+                        })),
+                    };
+
+                    // +1 for the space; if there wasn't one that's ok
+                    self.next_char_idx += word.len();
+
+                    dbg!(self.next_char_idx);
+
+                    return dbg!(token);
+                }
+                StartOfToken::Number => {
+                    let _start = self.next_char_idx - 1;
+                    let _off = self.source[self.next_char_idx..].find('.');
+                    todo!("parse numbers")
                 }
             };
         }
