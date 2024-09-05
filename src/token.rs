@@ -15,6 +15,7 @@ pub enum Token {
         offset: usize,
         length: usize,
     },
+    Comment,
 }
 
 impl Display for Token {
@@ -25,6 +26,10 @@ impl Display for Token {
             Token::Number(n) => write!(f, "{n}"),
             Token::Identifier { offset, length } => todo!(),
             Token::String { offset, length } => todo!(),
+            Token::Comment => {
+                // ignore
+                Ok(())
+            }
         }
     }
 }
@@ -78,7 +83,7 @@ pub enum LiteralToken {
     RightBrace,
     Comma,
     Dot,
-    Dash,
+    Minus,
     Plus,
     SemiColon,
     Star,
@@ -102,9 +107,9 @@ impl Display for LiteralToken {
             LiteralToken::RightBrace => write!(f, "RIGHT_BRACE }} null"),
             LiteralToken::Comma => write!(f, "COMMA , null"),
             LiteralToken::Dot => write!(f, "DOT . null"),
-            LiteralToken::Dash => write!(f, "DASH - null"),
+            LiteralToken::Minus => write!(f, "MINUS - null"),
             LiteralToken::Plus => write!(f, "PLUS + null"),
-            LiteralToken::SemiColon => write!(f, "SEMI_COLON ; null"),
+            LiteralToken::SemiColon => write!(f, "SEMICOLON ; null"),
             LiteralToken::Star => write!(f, "STAR * null"),
             LiteralToken::Eq => write!(f, "EQUAL = null"),
             LiteralToken::EqEq => write!(f, "EQUAL_EQUAL == null"),

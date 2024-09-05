@@ -2,7 +2,6 @@ use crate::token;
 use crate::token::LiteralToken;
 use crate::token::LiteralToken::{Bang, BangEq, Eq, EqEq, Greater, GreaterEq, Less, LessEq};
 use anyhow::Error;
-use itertools::Itertools;
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read};
@@ -17,9 +16,14 @@ pub struct Scanner {
     next_char_idx: usize,
     // save it for the future ... might want to print filename in errors
     _filename: PathBuf,
+    has_tokenization_err: bool,
 }
 
 impl Scanner {
+    pub fn has_tokenization_err(&self) -> bool {
+        self.has_tokenization_err
+    }
+
     pub fn new(filename: &PathBuf) -> io::Result<Self> {
         let file = File::open(filename)?;
         let mut reader = BufReader::new(file);
@@ -31,6 +35,7 @@ impl Scanner {
             source,
             next_char_idx: 0,
             _filename: filename.clone(),
+            has_tokenization_err: false,
         })
     }
 
@@ -41,29 +46,36 @@ impl Scanner {
             source: String::from(input),
             next_char_idx: 0,
             _filename: PathBuf::from(""),
+            has_tokenization_err: false,
         }
     }
 
     pub fn tokenize(&mut self) -> anyhow::Result<()> {
         while let Some(token) = self.next() {
             match token {
-                Ok(t) => {
-                    println!("{t}");
-                    self.tokens.push(t);
-                }
+                Ok(t) => match t {
+                    // todo: how can we handle this better?
+                    Token::Comment => {}
+                    _ => {
+                        println!("{t}");
+                        self.tokens.push(t);
+                    }
+                },
                 Err(e) => {
                     if let Some(LexerError::InvalidToken { line, token }) =
                         e.downcast_ref::<LexerError>()
                     {
-                        eprintln!("[line: {}] {}", line, token);
+                        eprintln!("[line {}] Error: Unexpected character: {}", line, token);
+                        self.has_tokenization_err = true;
                         continue;
                     }
+
                     return Err(e);
                 }
             }
         }
 
-        eprintln!("EOF  null");
+        println!("EOF  null");
 
         Ok(())
     }
@@ -100,7 +112,7 @@ impl Iterator for Scanner {
                 '}' => return Some(Ok(Token::Literal(LiteralToken::RightBrace))),
                 ',' => return Some(Ok(Token::Literal(LiteralToken::Comma))),
                 '.' => return Some(Ok(Token::Literal(LiteralToken::Dot))),
-                '-' => return Some(Ok(Token::Literal(LiteralToken::Dash))),
+                '-' => return Some(Ok(Token::Literal(LiteralToken::Minus))),
                 '+' => return Some(Ok(Token::Literal(LiteralToken::Plus))),
                 ';' => return Some(Ok(Token::Literal(LiteralToken::SemiColon))),
                 '*' => return Some(Ok(Token::Literal(LiteralToken::Star))),
@@ -131,8 +143,13 @@ impl Iterator for Scanner {
                         .nth(self.next_char_idx)
                         .is_some_and(|c| c == '/')
                     {
-                        self.next_char_idx += 1;
-                        todo!("eat comment")
+                        if let Some(pos) = self.source[self.next_char_idx..].find('\n') {
+                            self.next_char_idx += pos + 1;
+                            Some(Ok(Token::Comment))
+                        } else {
+                            self.next_char_idx = self.source.len();
+                            None
+                        }
                     } else {
                         Some(Ok(Token::Literal(LiteralToken::Slash)))
                     }
@@ -199,7 +216,7 @@ impl Iterator for Scanner {
 
 #[derive(Debug, thiserror::Error)]
 enum LexerError {
-    #[error("Invalid character: {token}")]
+    #[error("Unexpected character: {token}")]
     InvalidToken { line: usize, token: char },
 }
 
@@ -227,7 +244,7 @@ mod test {
             Token::Literal(LiteralToken::SemiColon),
             Token::Literal(LiteralToken::Comma),
             Token::Literal(LiteralToken::Plus),
-            Token::Literal(LiteralToken::Dash),
+            Token::Literal(LiteralToken::Minus),
             Token::Literal(LiteralToken::Star),
             Token::Literal(LiteralToken::EqEq),
             Token::Literal(LiteralToken::Eq),

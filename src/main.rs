@@ -22,9 +22,13 @@ fn main() {
     match &lox.commands {
         LoxCommands::Tokenize { filename } => {
             if let Ok(mut scanner) = lex::Scanner::new(filename) {
-                scanner
-                    .tokenize()
-                    .unwrap_or_else(|_| std::process::exit(65));
+                let _ = scanner.tokenize().map(|_| -> anyhow::Result<()> {
+                    if scanner.has_tokenization_err() {
+                        std::process::exit(65);
+                    }
+
+                    Ok(())
+                });
             }
         }
     }
