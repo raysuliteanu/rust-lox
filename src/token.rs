@@ -24,8 +24,14 @@ impl Display for Token {
             Token::Keyword(t) => write!(f, "{t}"),
             Token::Literal(t) => write!(f, "{t}"),
             Token::Number(n) => write!(f, "{n}"),
-            Token::Identifier { offset, length } => todo!(),
-            Token::String { offset, length } => todo!(),
+            Token::Identifier { offset, length } => {
+                // for the time being, so we don't panic ...
+                write!(f, "{offset}:{length}")
+            }
+            Token::String { offset, length } => {
+                // for the time being, so we don't panic ...
+                write!(f, "{offset}:{length}")
+            }
             Token::Comment => {
                 // ignore
                 Ok(())

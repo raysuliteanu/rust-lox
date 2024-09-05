@@ -20,10 +20,6 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn has_tokenization_err(&self) -> bool {
-        self.has_tokenization_err
-    }
-
     pub fn new(filename: &PathBuf) -> io::Result<Self> {
         let file = File::open(filename)?;
         let mut reader = BufReader::new(file);
@@ -83,6 +79,10 @@ impl Scanner {
     fn current_line(&self) -> usize {
         self.source[..self.next_char_idx].lines().count()
     }
+
+    pub fn has_tokenization_err(&self) -> bool {
+        self.has_tokenization_err
+    }
 }
 
 impl Iterator for Scanner {
@@ -135,7 +135,15 @@ impl Iterator for Scanner {
 
             // todo: some cleanup stll could be done here w.r.t. almost duplicate code
             return match t {
-                StartOfToken::StringLiteral => todo!("string literal"),
+                StartOfToken::StringLiteral => {
+                    if let Some(length) = self.source[self.next_char_idx..].find('"') {
+                        let offset = self.next_char_idx - 1;
+                        self.next_char_idx += length + 1;
+                        Some(Ok(Token::String { offset, length }))
+                    } else {
+                        todo!("handle error")
+                    }
+                }
                 StartOfToken::SlashOrComment => {
                     if self
                         .source
@@ -168,7 +176,7 @@ impl Iterator for Scanner {
                     }
                 }
                 StartOfToken::KeywordOrIdentifier => {
-                    let start = dbg!(self.next_char_idx - 1);
+                    let start = self.next_char_idx - 1;
                     // split_once will "remove" the space if found ... neither part contains the space
                     let word = match self.source[start..].split_once(' ') {
                         Some((word, _)) => word,
@@ -200,9 +208,7 @@ impl Iterator for Scanner {
                     // +1 for the space; if there wasn't one that's ok
                     self.next_char_idx += word.len();
 
-                    dbg!(self.next_char_idx);
-
-                    return dbg!(token);
+                    return token;
                 }
                 StartOfToken::Number => {
                     let _start = self.next_char_idx - 1;
@@ -293,5 +299,48 @@ mod test {
     fn check(actual: Vec<Token>, expected: Vec<Token>) {
         assert_eq!(actual.len(), expected.len());
         assert_equal(actual, expected);
+    }
+
+    #[test]
+    fn string_literals() {
+        let input = "\"some string value\"";
+        let mut scanner = Scanner::new_from_string(input);
+        let result = scanner.tokenize();
+
+        assert!(result.is_ok());
+
+        let actual = scanner.tokens;
+        let expected = vec![Token::String {
+            offset: 0,
+            length: input.len() - 2, // for the '\' escapes
+        }];
+
+        check(actual, expected);
+    }
+
+    #[test]
+    fn string_literals_with_other_stuff() {
+        let input = "var x = \"some string value\";";
+        let mut scanner = Scanner::new_from_string(input);
+        let result = scanner.tokenize();
+
+        assert!(result.is_ok());
+
+        let actual = scanner.tokens;
+        let expected = vec![
+            Token::Keyword(KeywordToken::Var),
+            Token::Identifier {
+                offset: 4,
+                length: 1,
+            },
+            Token::Literal(LiteralToken::Eq),
+            Token::String {
+                offset: 8,
+                length: 17,
+            },
+            Token::Literal(LiteralToken::SemiColon),
+        ];
+
+        check(actual, expected);
     }
 }
