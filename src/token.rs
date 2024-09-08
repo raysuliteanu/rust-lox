@@ -9,10 +9,7 @@ pub enum Token {
         value: f64,
     },
     Identifier {
-        // index into source buffer
-        // todo: make line string
-        offset: usize,
-        length: usize,
+        value: String,
     },
     String {
         value: String,
@@ -40,15 +37,8 @@ impl Display for Token {
             Token::Keyword(t) => write!(f, "{t}"),
             Token::Literal(t) => write!(f, "{t}"),
             Token::Number { raw, value } => write!(f, "NUMBER {raw} {}", format_float(*value)),
-            Token::Identifier {
-                offset: _,
-                length: _,
-            } => {
-                write!(f, "IDENTIFIER")
-            }
-            Token::String { value } => {
-                write!(f, "STRING \"{value}\" {value}")
-            }
+            Token::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
+            Token::String { value } => write!(f, "STRING \"{value}\" {value}"),
             Token::Comment => {
                 // ignore
                 Ok(())

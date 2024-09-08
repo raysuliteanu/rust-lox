@@ -132,7 +132,7 @@ impl Iterator for Scanner {
                 }
             };
 
-            // todo: some cleanup stll could be done here w.r.t. almost duplicate code
+            // todo: some cleanup still could be done here w.r.t. almost duplicate code
             return match t {
                 StartOfToken::Number => {
                     let start = self.next_char_idx - 1;
@@ -224,7 +224,7 @@ impl Iterator for Scanner {
                 StartOfToken::KeywordOrIdentifier => {
                     let start = self.next_char_idx - 1;
                     // split_once will "remove" the space if found ... neither part contains the space
-                    let word = match self.source[start..].split_once(' ') {
+                    let word = match self.source[start..].split_once(|c: char| { !(c.is_alphanumeric() || c == '_') }) {
                         Some((word, _)) => word,
                         None => &self.source[start..],
                     };
@@ -245,14 +245,10 @@ impl Iterator for Scanner {
                         "true" => Some(Ok(Token::Keyword(token::KeywordToken::True))),
                         "var" => Some(Ok(Token::Keyword(token::KeywordToken::Var))),
                         "while" => Some(Ok(Token::Keyword(token::KeywordToken::While))),
-                        _ => Some(Ok(Token::Identifier {
-                            offset: start,
-                            length: word.len(),
-                        })),
+                        _ => Some(Ok(Token::Identifier { value: String::from(&self.source[start..start + word.len()]) })),
                     };
 
-                    // +1 for the space; if there wasn't one that's ok
-                    self.next_char_idx += word.len();
+                    self.next_char_idx += word.len() - 1; // -1 because we added one at the start
 
                     return token;
                 }
@@ -340,11 +336,6 @@ mod test {
         check(actual, expected);
     }
 
-    fn check(actual: Vec<Token>, expected: Vec<Token>) {
-        assert_eq!(actual.len(), expected.len());
-        assert_equal(actual, expected);
-    }
-
     #[test]
     fn string_literals() {
         let input = "\"some string value\"";
@@ -372,10 +363,7 @@ mod test {
         let actual = scanner.tokens;
         let expected = vec![
             Token::Keyword(KeywordToken::Var),
-            Token::Identifier {
-                offset: 4,
-                length: 1,
-            },
+            Token::Identifier { value: "x".to_string() },
             Token::Literal(LiteralToken::Eq),
             Token::String {
                 value: "some string value".to_string(),
@@ -421,5 +409,32 @@ mod test {
         ];
 
         check(actual, expected);
+    }
+
+    #[test]
+    fn identifiers() {
+        let input = "(foo, bar, baz)";
+        let mut scanner = Scanner::new_from_string(input);
+        let result = scanner.tokenize();
+
+        assert!(result.is_ok());
+
+        let actual = scanner.tokens;
+        let expected = vec![
+            Token::Literal(LiteralToken::LeftParen),
+            Token::Identifier { value: "foo".to_string(), },
+            Token::Literal(LiteralToken::Comma),
+            Token::Identifier { value: "bar".to_string(), },
+            Token::Literal(LiteralToken::Comma),
+            Token::Identifier { value: "baz".to_string(), },
+            Token::Literal(LiteralToken::RightParen),
+        ];
+
+        check(actual, expected);
+    }
+
+    fn check(actual: Vec<Token>, expected: Vec<Token>) {
+        assert_eq!(actual.len(), expected.len());
+        assert_equal(actual, expected);
     }
 }
