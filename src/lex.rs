@@ -229,7 +229,7 @@ impl Iterator for Scanner {
                         None => &self.source[start..],
                     };
 
-                    let token = match word.to_lowercase().as_str() {
+                    let token = match word {
                         "and" => Some(Ok(Token::Keyword(token::KeywordToken::And))),
                         "class" => Some(Ok(Token::Keyword(token::KeywordToken::Class))),
                         "else" => Some(Ok(Token::Keyword(token::KeywordToken::Else))),
@@ -239,6 +239,7 @@ impl Iterator for Scanner {
                         "if" => Some(Ok(Token::Keyword(token::KeywordToken::If))),
                         "nil" => Some(Ok(Token::Keyword(token::KeywordToken::Nil))),
                         "or" => Some(Ok(Token::Keyword(token::KeywordToken::Or))),
+                        "print" => Some(Ok(Token::Keyword(token::KeywordToken::Print))),
                         "return" => Some(Ok(Token::Keyword(token::KeywordToken::Return))),
                         "super" => Some(Ok(Token::Keyword(token::KeywordToken::Super))),
                         "this" => Some(Ok(Token::Keyword(token::KeywordToken::This))),
@@ -308,7 +309,7 @@ mod test {
 
     #[test]
     fn keywords() {
-        let keywords = "and class else false for fun if nil or return super this true var while";
+        let keywords = "and class else false for fun if nil or print return super this true var while";
         let mut scanner = Scanner::new_from_string(keywords);
         let result = scanner.tokenize();
 
@@ -325,6 +326,7 @@ mod test {
             Token::Keyword(KeywordToken::If),
             Token::Keyword(KeywordToken::Nil),
             Token::Keyword(KeywordToken::Or),
+            Token::Keyword(KeywordToken::Print),
             Token::Keyword(KeywordToken::Return),
             Token::Keyword(KeywordToken::Super),
             Token::Keyword(KeywordToken::This),

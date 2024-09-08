@@ -64,6 +64,7 @@ pub enum KeywordToken {
     True,
     Var,
     While,
+    Print,
 }
 
 impl Display for KeywordToken {
@@ -78,6 +79,7 @@ impl Display for KeywordToken {
             KeywordToken::If => write!(f, "IF if null"),
             KeywordToken::Nil => write!(f, "NIL nil null"),
             KeywordToken::Or => write!(f, "OR or null"),
+            KeywordToken::Print => write!(f, "PRINT print null"),
             KeywordToken::Return => write!(f, "RETURN return null"),
             KeywordToken::Super => write!(f, "SUPER super null"),
             KeywordToken::This => write!(f, "THIS this null"),
