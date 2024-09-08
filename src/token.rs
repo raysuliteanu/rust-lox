@@ -4,9 +4,13 @@ use std::fmt::Display;
 pub enum Token {
     Keyword(KeywordToken),
     Literal(LiteralToken),
-    Number(f64),
+    Number {
+        raw: String,
+        value: f64,
+    },
     Identifier {
         // index into source buffer
+        // todo: make line string
         offset: usize,
         length: usize,
     },
@@ -18,10 +22,24 @@ pub enum Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // this is for codecrafters specifically
+        fn format_float(number: f64) -> String {
+            // Use high precision initially
+            let mut formatted = format!("{:.10}", number);
+            // Remove trailing zeros
+            formatted = formatted.trim_end_matches('0').to_string();
+            // ensure all formatted numbers end in ".0"
+            if formatted.ends_with('.') {
+                formatted.push('0');
+            }
+
+            formatted
+        }
+
         match self {
             Token::Keyword(t) => write!(f, "{t}"),
             Token::Literal(t) => write!(f, "{t}"),
-            Token::Number(n) => write!(f, "{n}"),
+            Token::Number { raw, value } => write!(f, "NUMBER {raw} {}", format_float(*value)),
             Token::Identifier {
                 offset: _,
                 length: _,

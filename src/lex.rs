@@ -2,6 +2,7 @@ use crate::token;
 use crate::token::LiteralToken;
 use crate::token::LiteralToken::{Bang, BangEq, Eq, EqEq, Greater, GreaterEq, Less, LessEq};
 use anyhow::Error;
+use itertools::Itertools;
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read};
@@ -133,6 +134,47 @@ impl Iterator for Scanner {
 
             // todo: some cleanup stll could be done here w.r.t. almost duplicate code
             return match t {
+                StartOfToken::Number => {
+                    let start = self.next_char_idx - 1;
+
+                    let offset = match self.source[start..]
+                        .chars()
+                        .find_position(|c| !c.is_ascii_digit())
+                    {
+                        Some((first_dot_off, '.')) => {
+                            let mut count_digits_after_dot = 0;
+                            for c in self.source[start + first_dot_off + 1..].chars() {
+                                if c.is_ascii_digit() {
+                                    count_digits_after_dot += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if count_digits_after_dot > 0 {
+                                start + first_dot_off + count_digits_after_dot + 1
+                            // + 1 for the dot
+                            } else {
+                                // otherwise leave the dot to be tokenized next time through tokenize()
+                                start + first_dot_off
+                            }
+                        }
+                        Some((first_dot_off, _)) => start + first_dot_off,
+                        None => {
+                            // nothing but digits till the eof
+                            self.source.len()
+                        }
+                    };
+
+                    let value = self.source[start..offset].parse().unwrap();
+
+                    self.next_char_idx = offset;
+
+                    Some(Ok(Token::Number {
+                        raw: String::from(&self.source[start..offset]),
+                        value,
+                    }))
+                }
                 StartOfToken::StringLiteral => {
                     let offset = self.next_char_idx;
                     if let Some(length) = self.source[offset..].find('"') {
@@ -213,11 +255,6 @@ impl Iterator for Scanner {
                     self.next_char_idx += word.len();
 
                     return token;
-                }
-                StartOfToken::Number => {
-                    let _start = self.next_char_idx - 1;
-                    let _off = self.source[self.next_char_idx..].find('.');
-                    todo!("parse numbers")
                 }
             };
         }
@@ -344,6 +381,43 @@ mod test {
                 value: "some string value".to_string(),
             },
             Token::Literal(LiteralToken::SemiColon),
+        ];
+
+        check(actual, expected);
+    }
+
+    #[test]
+    fn numbers() {
+        let input = "123 123.456 .456 123. 42.42";
+        let mut scanner = Scanner::new_from_string(input);
+        let result = scanner.tokenize();
+
+        assert!(result.is_ok());
+
+        let actual = scanner.tokens;
+        let expected = vec![
+            Token::Number {
+                raw: "123".to_string(),
+                value: 123.0,
+            },
+            Token::Number {
+                raw: "123.456".to_string(),
+                value: 123.456,
+            },
+            Token::Literal(LiteralToken::Dot),
+            Token::Number {
+                raw: "456".to_string(),
+                value: 456.0,
+            },
+            Token::Number {
+                raw: "123".to_string(),
+                value: 123.0,
+            },
+            Token::Literal(LiteralToken::Dot),
+            Token::Number {
+                raw: "42.42".to_string(),
+                value: 42.42,
+            },
         ];
 
         check(actual, expected);
