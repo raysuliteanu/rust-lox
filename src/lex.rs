@@ -229,7 +229,7 @@ impl Iterator for Scanner {
                         None => &self.source[start..],
                     };
 
-                    let token = match word {
+                    let token = match word.to_lowercase().as_str() {
                         "and" => Some(Ok(Token::Keyword(token::KeywordToken::And))),
                         "class" => Some(Ok(Token::Keyword(token::KeywordToken::Class))),
                         "else" => Some(Ok(Token::Keyword(token::KeywordToken::Else))),
