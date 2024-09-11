@@ -11,7 +11,7 @@ use token::Token;
 
 #[derive(Debug)]
 pub struct Scanner {
-    tokens: Vec<Token>,
+    pub tokens: Vec<Token>,
     source: String,
     // next char in 'source' to read
     next_char_idx: usize,
@@ -54,7 +54,7 @@ impl Scanner {
                     // todo: how can we handle this better?
                     Token::Comment => {}
                     _ => {
-                        println!("{t}");
+                        eprintln!("{t}");
                         self.tokens.push(t);
                     }
                 },
@@ -70,7 +70,7 @@ impl Scanner {
             }
         }
 
-        println!("EOF  null");
+        eprintln!("EOF  null");
 
         Ok(())
     }
