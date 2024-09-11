@@ -18,10 +18,11 @@ pub struct Scanner {
     // save it for the future ... might want to print filename in errors
     _filename: PathBuf,
     has_tokenization_err: bool,
+    tokenization_only: bool,
 }
 
 impl Scanner {
-    pub fn new(filename: &PathBuf) -> io::Result<Self> {
+    pub fn new(filename: &PathBuf, tokenization_only: bool) -> io::Result<Self> {
         let file = File::open(filename)?;
         let mut reader = BufReader::new(file);
         let mut source = String::new();
@@ -33,6 +34,7 @@ impl Scanner {
             next_char_idx: 0,
             _filename: filename.clone(),
             has_tokenization_err: false,
+            tokenization_only,
         })
     }
 
@@ -44,6 +46,7 @@ impl Scanner {
             next_char_idx: 0,
             _filename: PathBuf::from(""),
             has_tokenization_err: false,
+            tokenization_only: true,
         }
     }
 
@@ -54,7 +57,9 @@ impl Scanner {
                     // todo: how can we handle this better?
                     Token::Comment => {}
                     _ => {
-                        eprintln!("{t}");
+                        if self.tokenization_only {
+                            println!("{t}");
+                        }
                         self.tokens.push(t);
                     }
                 },
@@ -70,7 +75,9 @@ impl Scanner {
             }
         }
 
-        eprintln!("EOF  null");
+        if self.tokenization_only {
+            println!("EOF  null");
+        }
 
         Ok(())
     }
@@ -262,7 +269,6 @@ impl Iterator for Scanner {
 enum LexerError {
     #[error("[line {line}] Error: Unexpected character: {token}")]
     InvalidToken { line: usize, token: char },
-
     #[error("[line {line}] Error: Unterminated string.")]
     UnterminatedString { line: usize },
 }

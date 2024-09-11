@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use lex::Scanner;
 use std::path::PathBuf;
 use std::str;
+use anyhow::Error;
 
 mod lex;
 mod parser;
@@ -25,11 +26,15 @@ fn main() {
 
     match &lox.commands {
         LoxCommands::Tokenize { filename } => {
-            let _ = tokenize(filename);
+            let res = tokenize(filename, true);
+            
+            if res.is_err() {
+                std::process::exit(65);
+            }
         }
         LoxCommands::Parse { filename } => {
             // first need to tokenize
-            let _ = tokenize(filename).and_then(|tokens| {
+            let _ = tokenize(filename, false).and_then(|tokens| {
                 let parser = parser::PrattParser::new(tokens);
                 let ast = parser.parse()?;
                 println!("{ast}");
@@ -39,11 +44,11 @@ fn main() {
     }
 }
 
-fn tokenize(filename: &PathBuf) -> anyhow::Result<Vec<Token>> {
-    let mut scanner = Scanner::new(filename)?;
+fn tokenize(filename: &PathBuf, tokenization_only: bool) -> anyhow::Result<Vec<Token>> {
+    let mut scanner = Scanner::new(filename, tokenization_only)?;
     scanner.tokenize()?;
     if scanner.has_tokenization_err() {
-        std::process::exit(65);
+        return Err(Error::msg("Tokenization failed"));
     }
 
     Ok(scanner.tokens)
