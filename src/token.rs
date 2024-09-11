@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use crate::codecrafters;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -19,24 +20,10 @@ pub enum Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // this is for codecrafters specifically
-        fn format_float(number: f64) -> String {
-            // Use high precision initially
-            let mut formatted = format!("{:.10}", number);
-            // Remove trailing zeros
-            formatted = formatted.trim_end_matches('0').to_string();
-            // ensure all formatted numbers end in ".0"
-            if formatted.ends_with('.') {
-                formatted.push('0');
-            }
-
-            formatted
-        }
-
         match self {
             Token::Keyword(t) => write!(f, "{t}"),
             Token::Literal(t) => write!(f, "{t}"),
-            Token::Number { raw, value } => write!(f, "NUMBER {raw} {}", format_float(*value)),
+            Token::Number { raw, value } => write!(f, "NUMBER {raw} {}", codecrafters::format_float(*value)),
             Token::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
             Token::String { value } => write!(f, "STRING \"{value}\" {value}"),
             Token::Comment => {

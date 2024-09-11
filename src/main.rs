@@ -8,6 +8,7 @@ use anyhow::Error;
 mod lex;
 mod parser;
 mod token;
+mod codecrafters;
 
 #[derive(Parser)]
 struct Lox {

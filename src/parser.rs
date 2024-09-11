@@ -1,5 +1,6 @@
 use crate::token::{LiteralToken, Token};
 use std::fmt::{self, Display};
+use crate::codecrafters;
 
 pub struct PrattParser {
     tokens: Vec<Token>,
@@ -138,7 +139,7 @@ pub enum AstToken {
 impl Display for AstToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AstToken::Number(n) => write!(f, "{n}"),
+            AstToken::Number(n) => write!(f, "{}", codecrafters::format_float(*n)),
             AstToken::String(s) => write!(f, "{s}"),
             AstToken::Identifier(s) => write!(f, "{s}"),
             AstToken::Op(op) => write!(f, "{op}"),
