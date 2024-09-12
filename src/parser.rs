@@ -22,28 +22,54 @@ impl PrattParser {
     fn parse_expression(&mut self, min_bp: u8) -> anyhow::Result<Ast> {
         let mut lhs = match self.next_token() {
             Some(value) => match value {
-                AstToken::String(_) | AstToken::Number(_) | AstToken::Op(_) => Ast::Atom(value),
+                AstToken::Op(OpType::Group('(')) => {
+                    let lhs = self.parse_expression(0)?;
+                    eprintln!("lhs: {lhs}");
+                    assert_eq!(self.next_token().unwrap(), AstToken::Op(OpType::Group(')')));
+                    lhs
+                }
+                AstToken::String(_) | AstToken::Number(_) | AstToken::Op(_) => dbg!(Ast::Atom(value)),
                 _ => Ast::Atom(AstToken::Eof),
             },
             None => panic!("bad token stream"),
         };
 
-        while let Some(op) = self.next_token() {
-            let r_bp = if let Some((l_bp, r_bp)) = self.infix_binding_power(&op) {
+        loop {
+            let token = match self.peek_token() {
+                Some(value) => match value {
+                    AstToken::Eof => break,
+                    AstToken::Op(_) => value,
+                    t => panic!("bad token: {:?}", t),
+                },
+                None => break,
+            };
+
+            if let Some((l_bp, ())) = self.postfix_binding_power(&token) {
                 if l_bp < min_bp {
                     break;
                 }
 
-                r_bp
-            } else {
-                todo!("infix_binding_power() found invalid op: {op}");
+                self.next_token();
+
+                lhs = Ast::Cons(token, vec![lhs]);
+                continue;
+            }
+
+            if let Some((l_bp, r_bp)) = self.infix_binding_power(&token) {
+                if l_bp < min_bp {
+                    break;
+                }
+
+                self.next_token();
+
+                let rhs = self.parse_expression(r_bp)?;
+
+                lhs = Ast::Cons(token, vec![lhs, rhs]);
+                
+                continue;
             };
-
-            // let _ = self.next_token();
-
-            let rhs = self.parse_expression(r_bp)?;
-
-            lhs = Ast::Cons(op, vec![lhs, rhs]);
+            
+            break;
         }
 
         Ok(lhs)
@@ -52,11 +78,17 @@ impl PrattParser {
     fn next_token(&mut self) -> Option<AstToken> {
         let token = self.tokens.get(self.current).map(|t| t.into());
         self.current += 1;
-        token
+        dbg!(token)
     }
 
-    fn infix_binding_power(&mut self, op: &AstToken) -> Option<(u8, u8)> {
-        match op {
+    fn peek_token(&mut self) -> Option<AstToken> {
+        let token = self.tokens.get(self.current + 1).map(|t| t.into());
+        dbg!(token)
+    }
+
+    fn infix_binding_power(&mut self, token: &AstToken) -> Option<(u8, u8)> {
+        eprintln!("infix_binding_power({token})");
+        match token {
             AstToken::Op(op) => match op {
                 OpType::EqEq => Some((2, 1)),
                 OpType::Plus | OpType::Minus => Some((5, 6)),
@@ -67,9 +99,16 @@ impl PrattParser {
             _ => None,
         }
     }
+
+    fn postfix_binding_power(&self, token: &AstToken) -> Option<(u8, ())> {
+        match token {
+            AstToken::Op(OpType::Bang) => Some((7, ())),
+            _ => None,
+        }
+    }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum OpType {
     Dot,
     Minus,
@@ -95,6 +134,7 @@ pub enum OpType {
     While,
     Print,
     Nil,
+    Group(char),
 }
 
 impl Display for OpType {
@@ -124,10 +164,11 @@ impl Display for OpType {
             OpType::Greater => write!(f, ">"),
             OpType::GreaterEq => write!(f, ">="),
             OpType::Slash => write!(f, "/"),
+            OpType::Group(_) => write!(f, "group"),
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AstToken {
     Number(f64),
     String(String),
@@ -172,6 +213,10 @@ impl From<&Token> for AstToken {
                 LiteralToken::Star => AstToken::Op(OpType::Star),
                 LiteralToken::Slash => AstToken::Op(OpType::Slash),
                 LiteralToken::Dot => AstToken::Op(OpType::Dot),
+                LiteralToken::LeftParen => AstToken::Op(OpType::Group('(')),
+                LiteralToken::RightParen => AstToken::Op(OpType::Group(')')),
+                LiteralToken::LeftBrace => AstToken::Op(OpType::Group('{')),
+                LiteralToken::RightBrace => AstToken::Op(OpType::Group('}')),
                 _ => todo!("from literal token {l}"),
             },
             Token::Number { value, .. } => AstToken::Number(*value),
