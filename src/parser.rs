@@ -22,7 +22,7 @@ impl PrattParser {
     fn parse_expression(&mut self, min_bp: u8) -> anyhow::Result<Ast> {
         let mut lhs = match self.next_token() {
             Some(value) => match value {
-                AstToken::Number(_) | AstToken::Op(_) => Ast::Atom(value),
+                AstToken::String(_) | AstToken::Number(_) | AstToken::Op(_) => Ast::Atom(value),
                 _ => Ast::Atom(AstToken::Eof),
             },
             None => panic!("bad token stream"),
