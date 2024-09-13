@@ -27,12 +27,12 @@ impl PrattParser {
                     eprintln!("group: {group}");
                     // eat closing ')'
                     self.next_token();
-                    
+
                     // assert_eq!(self.next_token().unwrap(), AstToken::Expr(ExprType::Group(')', _)));
                     // AstToken::Expr(Group('(', Box::new(group_expr)))
 
                     Ast::Cons(value, vec![group])
-                    
+
                 }
                 AstToken::String(_) | AstToken::Number(_) | AstToken::Expr(_) => Ast::Atom(value),
                 _ => Ast::Atom(AstToken::Eof),
@@ -40,6 +40,7 @@ impl PrattParser {
             None => panic!("bad token stream"),
         };
 
+        #[allow(clippy::while_let_loop)]
         loop {
             let token = match self.peek_token() {
                 Some(value) => match value {
@@ -71,10 +72,10 @@ impl PrattParser {
                 let rhs = self.parse_expression(r_bp)?;
 
                 lhs = Ast::Cons(token, vec![lhs, rhs]);
-                
+
                 continue;
             };
-            
+
             break;
         }
 
