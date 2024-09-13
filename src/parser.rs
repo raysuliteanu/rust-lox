@@ -22,13 +22,19 @@ impl PrattParser {
     fn parse_expression(&mut self, min_bp: u8) -> anyhow::Result<Ast> {
         let mut lhs = match self.next_token() {
             Some(value) => match value {
-                AstToken::Op(OpType::Group('(')) => {
-                    let lhs = self.parse_expression(0)?;
-                    eprintln!("lhs: {lhs}");
-                    assert_eq!(self.next_token().unwrap(), AstToken::Op(OpType::Group(')')));
-                    lhs
+                AstToken::Expr(ExprType::Group('(', _)) => {
+                    let group = self.parse_expression(0)?;
+                    eprintln!("group: {group}");
+                    // eat closing ')'
+                    self.next_token();
+                    
+                    // assert_eq!(self.next_token().unwrap(), AstToken::Expr(ExprType::Group(')', _)));
+                    // AstToken::Expr(Group('(', Box::new(group_expr)))
+
+                    Ast::Cons(value, vec![group])
+                    
                 }
-                AstToken::String(_) | AstToken::Number(_) | AstToken::Op(_) => dbg!(Ast::Atom(value)),
+                AstToken::String(_) | AstToken::Number(_) | AstToken::Expr(_) => Ast::Atom(value),
                 _ => Ast::Atom(AstToken::Eof),
             },
             None => panic!("bad token stream"),
@@ -38,7 +44,7 @@ impl PrattParser {
             let token = match self.peek_token() {
                 Some(value) => match value {
                     AstToken::Eof => break,
-                    AstToken::Op(_) => value,
+                    AstToken::Expr(_) => value,
                     t => panic!("bad token: {:?}", t),
                 },
                 None => break,
@@ -78,22 +84,21 @@ impl PrattParser {
     fn next_token(&mut self) -> Option<AstToken> {
         let token = self.tokens.get(self.current).map(|t| t.into());
         self.current += 1;
-        dbg!(token)
+        token
     }
 
     fn peek_token(&mut self) -> Option<AstToken> {
-        let token = self.tokens.get(self.current + 1).map(|t| t.into());
-        dbg!(token)
+        self.tokens.get(self.current + 1).map(|t| t.into())
     }
 
     fn infix_binding_power(&mut self, token: &AstToken) -> Option<(u8, u8)> {
         eprintln!("infix_binding_power({token})");
         match token {
-            AstToken::Op(op) => match op {
-                OpType::EqEq => Some((2, 1)),
-                OpType::Plus | OpType::Minus => Some((5, 6)),
-                OpType::Star | OpType::Slash => Some((7, 8)),
-                OpType::Dot => Some((14, 13)),
+            AstToken::Expr(op) => match op {
+                ExprType::EqEq => Some((2, 1)),
+                ExprType::Plus | ExprType::Minus => Some((5, 6)),
+                ExprType::Star | ExprType::Slash => Some((7, 8)),
+                ExprType::Dot => Some((14, 13)),
                 _ => None,
             },
             _ => None,
@@ -102,14 +107,14 @@ impl PrattParser {
 
     fn postfix_binding_power(&self, token: &AstToken) -> Option<(u8, ())> {
         match token {
-            AstToken::Op(OpType::Bang) => Some((7, ())),
+            AstToken::Expr(ExprType::Bang) => Some((7, ())),
             _ => None,
         }
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum OpType {
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprType {
     Dot,
     Minus,
     Plus,
@@ -134,46 +139,47 @@ pub enum OpType {
     While,
     Print,
     Nil,
-    Group(char),
+    Group(char, Box<AstToken>),
 }
 
-impl Display for OpType {
+impl Display for ExprType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OpType::And => write!(f, "and"),
-            OpType::False => write!(f, "false"),
-            OpType::For => write!(f, "for"),
-            OpType::If => write!(f, "if"),
-            OpType::Or => write!(f, "or"),
-            OpType::Print => write!(f, "print"),
-            OpType::Return => write!(f, "return"),
-            OpType::True => write!(f, "true"),
-            OpType::Var => write!(f, "var"),
-            OpType::While => write!(f, "while"),
-            OpType::Nil => write!(f, "nil"),
-            OpType::Dot => write!(f, "."),
-            OpType::Minus => write!(f, "-"),
-            OpType::Plus => write!(f, "+"),
-            OpType::Star => write!(f, "*"),
-            OpType::Eq => write!(f, "="),
-            OpType::EqEq => write!(f, "=="),
-            OpType::Bang => write!(f, "!"),
-            OpType::BangEq => write!(f, "!="),
-            OpType::Less => write!(f, "<"),
-            OpType::LessEq => write!(f, "<="),
-            OpType::Greater => write!(f, ">"),
-            OpType::GreaterEq => write!(f, ">="),
-            OpType::Slash => write!(f, "/"),
-            OpType::Group(_) => write!(f, "group"),
+            ExprType::And => write!(f, "and"),
+            ExprType::False => write!(f, "false"),
+            ExprType::For => write!(f, "for"),
+            ExprType::If => write!(f, "if"),
+            ExprType::Or => write!(f, "or"),
+            ExprType::Print => write!(f, "print"),
+            ExprType::Return => write!(f, "return"),
+            ExprType::True => write!(f, "true"),
+            ExprType::Var => write!(f, "var"),
+            ExprType::While => write!(f, "while"),
+            ExprType::Nil => write!(f, "nil"),
+            ExprType::Dot => write!(f, "."),
+            ExprType::Minus => write!(f, "-"),
+            ExprType::Plus => write!(f, "+"),
+            ExprType::Star => write!(f, "*"),
+            ExprType::Eq => write!(f, "="),
+            ExprType::EqEq => write!(f, "=="),
+            ExprType::Bang => write!(f, "!"),
+            ExprType::BangEq => write!(f, "!="),
+            ExprType::Less => write!(f, "<"),
+            ExprType::LessEq => write!(f, "<="),
+            ExprType::Greater => write!(f, ">"),
+            ExprType::GreaterEq => write!(f, ">="),
+            ExprType::Slash => write!(f, "/"),
+            ExprType::Group(_, _) => write!(f, "group"),
         }
     }
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum AstToken {
     Number(f64),
     String(String),
     Identifier(String),
-    Op(OpType),
+    Expr(ExprType),
     Eof,
 }
 
@@ -183,7 +189,7 @@ impl Display for AstToken {
             AstToken::Number(n) => write!(f, "{}", codecrafters::format_float(*n)),
             AstToken::String(s) => write!(f, "{s}"),
             AstToken::Identifier(s) => write!(f, "{s}"),
-            AstToken::Op(op) => write!(f, "{op}"),
+            AstToken::Expr(op) => write!(f, "{op}"),
             AstToken::Eof => Ok(()),
         }
     }
@@ -193,30 +199,31 @@ impl From<&Token> for AstToken {
     fn from(value: &Token) -> Self {
         match value {
             Token::Keyword(k) => match k {
-                crate::token::KeywordToken::And => AstToken::Op(OpType::And),
-                crate::token::KeywordToken::Or => AstToken::Op(OpType::Or),
-                crate::token::KeywordToken::True => AstToken::Op(OpType::True),
-                crate::token::KeywordToken::False => AstToken::Op(OpType::False),
-                crate::token::KeywordToken::While => AstToken::Op(OpType::While),
-                crate::token::KeywordToken::For => AstToken::Op(OpType::For),
-                crate::token::KeywordToken::If => AstToken::Op(OpType::If),
-                crate::token::KeywordToken::Return => AstToken::Op(OpType::Return),
-                crate::token::KeywordToken::Var => AstToken::Op(OpType::Var),
-                crate::token::KeywordToken::Print => AstToken::Op(OpType::Print),
-                crate::token::KeywordToken::Nil => AstToken::Op(OpType::Nil),
+                crate::token::KeywordToken::And => AstToken::Expr(ExprType::And),
+                crate::token::KeywordToken::Or => AstToken::Expr(ExprType::Or),
+                crate::token::KeywordToken::True => AstToken::Expr(ExprType::True),
+                crate::token::KeywordToken::False => AstToken::Expr(ExprType::False),
+                crate::token::KeywordToken::While => AstToken::Expr(ExprType::While),
+                crate::token::KeywordToken::For => AstToken::Expr(ExprType::For),
+                crate::token::KeywordToken::If => AstToken::Expr(ExprType::If),
+                crate::token::KeywordToken::Return => AstToken::Expr(ExprType::Return),
+                crate::token::KeywordToken::Var => AstToken::Expr(ExprType::Var),
+                crate::token::KeywordToken::Print => AstToken::Expr(ExprType::Print),
+                crate::token::KeywordToken::Nil => AstToken::Expr(ExprType::Nil),
                 _ => todo!("from keyword {k}"),
             },
             Token::Literal(l) => match l {
-                LiteralToken::EqEq => AstToken::Op(OpType::EqEq),
-                LiteralToken::Plus => AstToken::Op(OpType::Plus),
-                LiteralToken::Minus => AstToken::Op(OpType::Minus),
-                LiteralToken::Star => AstToken::Op(OpType::Star),
-                LiteralToken::Slash => AstToken::Op(OpType::Slash),
-                LiteralToken::Dot => AstToken::Op(OpType::Dot),
-                LiteralToken::LeftParen => AstToken::Op(OpType::Group('(')),
-                LiteralToken::RightParen => AstToken::Op(OpType::Group(')')),
-                LiteralToken::LeftBrace => AstToken::Op(OpType::Group('{')),
-                LiteralToken::RightBrace => AstToken::Op(OpType::Group('}')),
+                LiteralToken::EqEq => AstToken::Expr(ExprType::EqEq),
+                LiteralToken::Plus => AstToken::Expr(ExprType::Plus),
+                LiteralToken::Minus => AstToken::Expr(ExprType::Minus),
+                LiteralToken::Star => AstToken::Expr(ExprType::Star),
+                LiteralToken::Slash => AstToken::Expr(ExprType::Slash),
+                LiteralToken::Dot => AstToken::Expr(ExprType::Dot),
+                // note/todo: using Eof as the group is a hack; need a placeholder; probably box isn't right also, need RefCell?
+                LiteralToken::LeftParen => AstToken::Expr(ExprType::Group('(', Box::new(AstToken::Eof))),
+                LiteralToken::RightParen => AstToken::Expr(ExprType::Group(')', Box::new(AstToken::Eof))),
+                LiteralToken::LeftBrace => AstToken::Expr(ExprType::Group('{', Box::new(AstToken::Eof))),
+                LiteralToken::RightBrace => AstToken::Expr(ExprType::Group('}', Box::new(AstToken::Eof))),
                 _ => todo!("from literal token {l}"),
             },
             Token::Number { value, .. } => AstToken::Number(*value),
@@ -238,9 +245,9 @@ impl Display for Ast {
         match self {
             Ast::Atom(i) => write!(f, "{}", i),
             Ast::Cons(head, rest) => {
-                write!(f, "({}", head)?;
+                write!(f, "({} ", head)?;
                 for s in rest {
-                    write!(f, " {}", s)?
+                    write!(f, "{}", s)?
                 }
                 write!(f, ")")
             }
