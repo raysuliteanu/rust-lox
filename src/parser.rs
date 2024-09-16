@@ -109,7 +109,8 @@ impl PrattParser {
     fn infix_binding_power(&mut self, token: &Ast) -> Option<(u8, u8)> {
         match token {
             Ast::Atom(AstToken::Expr(op)) => match op {
-                ExprType::EqEq => Some((2, 1)),
+                ExprType::EqEq | ExprType::BangEq => Some((2, 1)),
+                ExprType::Less | ExprType::LessEq | ExprType::GreaterEq | ExprType::Greater => Some((3, 4)),
                 ExprType::Plus | ExprType::Minus => Some((5, 6)),
                 ExprType::Star | ExprType::Slash => Some((7, 8)),
                 ExprType::Dot => Some((14, 13)),
@@ -213,6 +214,10 @@ impl From<&LexToken> for AstToken {
                 _ => todo!("from keyword {k}"),
             },
             LexToken::Literal(l) => match l {
+                LiteralToken::Less => AstToken::Expr(ExprType::Less),
+                LiteralToken::LessEq => AstToken::Expr(ExprType::LessEq),
+                LiteralToken::Greater => AstToken::Expr(ExprType::Greater),
+                LiteralToken::GreaterEq => AstToken::Expr(ExprType::GreaterEq),
                 LiteralToken::EqEq => AstToken::Expr(ExprType::EqEq),
                 LiteralToken::Plus => AstToken::Expr(ExprType::Plus),
                 LiteralToken::Minus => AstToken::Expr(ExprType::Minus),
@@ -252,7 +257,7 @@ impl Display for Ast {
                     AstToken::Expr(op) => format!("{op}"),
                     AstToken::Eof => "".to_string(),
                 }
-            },
+            }
             Ast::Cons(head, rest) => {
                 let mut fmt = format!("({head} ");
 
@@ -365,7 +370,7 @@ mod tests {
         assert_eq!(format!("{ast}"), "(group 1.0)");
         Ok(())
     }
-    
+
     #[test]
     fn bang_true() -> anyhow::Result<()> {
         // in: !true
@@ -381,8 +386,6 @@ mod tests {
 
     #[test]
     fn bang_bang_true() -> anyhow::Result<()> {
-        // in: !true
-        // out: (! (! true))
         let p = &mut PrattParser::new(vec![
             Literal(LiteralToken::Bang),
             Literal(LiteralToken::Bang),
@@ -391,5 +394,21 @@ mod tests {
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "(! (! true))");
         Ok(())
+    }
+    
+    #[test]
+    fn comparison_ops() -> anyhow::Result<()> {
+        let p = &mut PrattParser::new(vec![
+            LexToken::Number { raw: "40".to_string(), value: 40.0 },
+            Literal(LiteralToken::Less),
+            LexToken::Number { raw: "121".to_string(), value: 121.0 },
+            Literal(LiteralToken::Less),
+            LexToken::Number { raw: "202".to_string(), value: 202.0 },
+        ]);
+        let ast = p.parse_expression(0)?;
+        assert_eq!(format!("{ast}"), "(< (< 40.0 121.0) 202.0)");
+        
+        Ok(())
+        
     }
 }
