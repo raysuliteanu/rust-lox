@@ -11,4 +11,3 @@ pub fn format_float(number: f64) -> String {
 
     formatted
 }
-

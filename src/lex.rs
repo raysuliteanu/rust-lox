@@ -231,7 +231,9 @@ impl Iterator for Scanner {
                 StartOfToken::KeywordOrIdentifier => {
                     let start = self.next_char_idx - 1;
                     // split_once will "remove" the space if found ... neither part contains the space
-                    let word = match self.source[start..].split_once(|c: char| { !(c.is_alphanumeric() || c == '_') }) {
+                    let word = match self.source[start..]
+                        .split_once(|c: char| !(c.is_alphanumeric() || c == '_'))
+                    {
                         Some((word, _)) => word,
                         None => &self.source[start..],
                     };
@@ -253,7 +255,9 @@ impl Iterator for Scanner {
                         "true" => Some(Ok(LexToken::Keyword(token::KeywordToken::True))),
                         "var" => Some(Ok(LexToken::Keyword(token::KeywordToken::Var))),
                         "while" => Some(Ok(LexToken::Keyword(token::KeywordToken::While))),
-                        _ => Some(Ok(LexToken::Identifier { value: String::from(&self.source[start..start + word.len()]) })),
+                        _ => Some(Ok(LexToken::Identifier {
+                            value: String::from(&self.source[start..start + word.len()]),
+                        })),
                     };
 
                     self.next_char_idx += word.len() - 1; // -1 because we added one at the start
@@ -315,7 +319,8 @@ mod test {
 
     #[test]
     fn keywords() {
-        let keywords = "and class else false for fun if nil or print return super this true var while";
+        let keywords =
+            "and class else false for fun if nil or print return super this true var while";
         let mut scanner = Scanner::new_from_string(keywords);
         let result = scanner.tokenize();
 
@@ -371,7 +376,9 @@ mod test {
         let actual = scanner.tokens;
         let expected = vec![
             LexToken::Keyword(KeywordToken::Var),
-            LexToken::Identifier { value: "x".to_string() },
+            LexToken::Identifier {
+                value: "x".to_string(),
+            },
             LexToken::Literal(LiteralToken::Eq),
             LexToken::String {
                 value: "some string value".to_string(),
@@ -430,11 +437,17 @@ mod test {
         let actual = scanner.tokens;
         let expected = vec![
             LexToken::Literal(LiteralToken::LeftParen),
-            LexToken::Identifier { value: "foo".to_string(), },
+            LexToken::Identifier {
+                value: "foo".to_string(),
+            },
             LexToken::Literal(LiteralToken::Comma),
-            LexToken::Identifier { value: "bar".to_string(), },
+            LexToken::Identifier {
+                value: "bar".to_string(),
+            },
             LexToken::Literal(LiteralToken::Comma),
-            LexToken::Identifier { value: "baz".to_string(), },
+            LexToken::Identifier {
+                value: "baz".to_string(),
+            },
             LexToken::Literal(LiteralToken::RightParen),
         ];
 

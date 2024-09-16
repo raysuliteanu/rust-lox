@@ -1,20 +1,13 @@
-use std::fmt::Display;
 use crate::codecrafters;
+use std::fmt::Display;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LexToken {
     Keyword(KeywordToken),
     Literal(LiteralToken),
-    Number {
-        raw: String,
-        value: f64,
-    },
-    Identifier {
-        value: String,
-    },
-    String {
-        value: String,
-    },
+    Number { raw: String, value: f64 },
+    Identifier { value: String },
+    String { value: String },
     Comment,
 }
 
@@ -23,7 +16,9 @@ impl Display for LexToken {
         match self {
             LexToken::Keyword(t) => write!(f, "{t}"),
             LexToken::Literal(t) => write!(f, "{t}"),
-            LexToken::Number { raw, value } => write!(f, "NUMBER {raw} {}", codecrafters::format_float(*value)),
+            LexToken::Number { raw, value } => {
+                write!(f, "NUMBER {raw} {}", codecrafters::format_float(*value))
+            }
             LexToken::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
             LexToken::String { value } => write!(f, "STRING \"{value}\" {value}"),
             LexToken::Comment => {

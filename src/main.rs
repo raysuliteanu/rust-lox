@@ -1,14 +1,14 @@
 use crate::token::LexToken;
+use anyhow::Error;
 use clap::{Parser, Subcommand};
 use lex::Scanner;
 use std::path::PathBuf;
 use std::str;
-use anyhow::Error;
 
+mod codecrafters;
 mod lex;
 mod parser;
 mod token;
-mod codecrafters;
 
 #[derive(Parser)]
 struct Lox {
@@ -28,19 +28,23 @@ fn main() {
     match &lox.commands {
         LoxCommands::Tokenize { filename } => {
             let res = tokenize(filename, true);
-            
+
             if res.is_err() {
                 std::process::exit(65);
             }
         }
         LoxCommands::Parse { filename } => {
-            // first need to tokenize
-            let _ = tokenize(filename, false).and_then(|tokens| {
-                let parser = parser::PrattParser::new(tokens);
-                let ast = parser.parse()?;
-                println!("{}", format!("{ast}").trim());
-                Ok(())
-            });
+            let _ = tokenize(filename, false)
+                .map_err(|_| std::process::exit(65))
+                .and_then(|tokens| {
+                    let parser = parser::PrattParser::new(tokens);
+                    parser
+                        .parse()
+                        .map_err(|_| std::process::exit(65))
+                        .map(|ast| {
+                            println!("{}", format!("{ast}").trim());
+                        })
+                });
         }
     }
 }

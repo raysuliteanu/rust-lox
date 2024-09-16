@@ -1,6 +1,6 @@
-use crate::token::{LiteralToken, LexToken};
-use std::fmt::{self, Display};
 use crate::codecrafters;
+use crate::token::{LexToken, LiteralToken};
+use std::fmt::{self, Display};
 
 pub struct PrattParser {
     tokens: Vec<LexToken>,
@@ -9,10 +9,7 @@ pub struct PrattParser {
 
 impl PrattParser {
     pub fn new(tokens: Vec<LexToken>) -> Self {
-        PrattParser {
-            tokens,
-            current: 0,
-        }
+        PrattParser { tokens, current: 0 }
     }
 
     pub fn parse(mut self) -> anyhow::Result<Ast> {
@@ -25,8 +22,20 @@ impl PrattParser {
                 Ast::Atom(AstToken::Expr(ExprType::Group('(', _))) => {
                     let group = self.parse_expression(0)?;
 
-                    // eat closing ')'
-                    let _ = self.next_token();
+                    // check for closing ')'
+                    match self.next_token() {
+                        None => return Err(ParserError::UnexpectedEof { line: 0 }.into()),
+                        Some(t) => match t {
+                            Ast::Atom(AstToken::Expr(ExprType::Group(')', _))) => {}
+                            _ => {
+                                return Err(ParserError::InvalidExpression {
+                                    line: 0,
+                                    token: ")",
+                                }
+                                .into())
+                            }
+                        },
+                    }
 
                     Ast::Cons(Box::from(value), vec![group])
                 }
@@ -41,7 +50,7 @@ impl PrattParser {
                 Ast::Atom(AstToken::String(_)) | Ast::Atom(AstToken::Number(_)) => value,
                 _ => Ast::Atom(AstToken::Eof),
             },
-            None => panic!("bad token stream"),
+            None => return Err(ParserError::UnexpectedEof { line: 0 }.into()),
         };
 
         #[allow(clippy::while_let_loop)]
@@ -101,7 +110,9 @@ impl PrattParser {
 
     fn prefix_binding_power(&mut self, token: &Ast) -> Option<((), u8)> {
         match token {
-            Ast::Atom(AstToken::Expr(ExprType::Plus)) | Ast::Atom(AstToken::Expr(ExprType::Minus)) | Ast::Atom(AstToken::Expr(ExprType::Bang)) => Some(((), 9)),
+            Ast::Atom(AstToken::Expr(ExprType::Plus))
+            | Ast::Atom(AstToken::Expr(ExprType::Minus))
+            | Ast::Atom(AstToken::Expr(ExprType::Bang)) => Some(((), 9)),
             _ => None,
         }
     }
@@ -110,7 +121,9 @@ impl PrattParser {
         match token {
             Ast::Atom(AstToken::Expr(op)) => match op {
                 ExprType::EqEq | ExprType::BangEq => Some((2, 1)),
-                ExprType::Less | ExprType::LessEq | ExprType::GreaterEq | ExprType::Greater => Some((3, 4)),
+                ExprType::Less | ExprType::LessEq | ExprType::GreaterEq | ExprType::Greater => {
+                    Some((3, 4))
+                }
                 ExprType::Plus | ExprType::Minus => Some((5, 6)),
                 ExprType::Star | ExprType::Slash => Some((7, 8)),
                 ExprType::Dot => Some((14, 13)),
@@ -227,10 +240,18 @@ impl From<&LexToken> for AstToken {
                 LiteralToken::Dot => AstToken::Expr(ExprType::Dot),
                 LiteralToken::Bang => AstToken::Expr(ExprType::Bang),
                 // note/todo: using Eof as the group is a hack; need a placeholder; probably box isn't right also, need RefCell?
-                LiteralToken::LeftParen => AstToken::Expr(ExprType::Group('(', Box::new(AstToken::Eof))),
-                LiteralToken::RightParen => AstToken::Expr(ExprType::Group(')', Box::new(AstToken::Eof))),
-                LiteralToken::LeftBrace => AstToken::Expr(ExprType::Group('{', Box::new(AstToken::Eof))),
-                LiteralToken::RightBrace => AstToken::Expr(ExprType::Group('}', Box::new(AstToken::Eof))),
+                LiteralToken::LeftParen => {
+                    AstToken::Expr(ExprType::Group('(', Box::new(AstToken::Eof)))
+                }
+                LiteralToken::RightParen => {
+                    AstToken::Expr(ExprType::Group(')', Box::new(AstToken::Eof)))
+                }
+                LiteralToken::LeftBrace => {
+                    AstToken::Expr(ExprType::Group('{', Box::new(AstToken::Eof)))
+                }
+                LiteralToken::RightBrace => {
+                    AstToken::Expr(ExprType::Group('}', Box::new(AstToken::Eof)))
+                }
                 _ => todo!("from literal token {l}"),
             },
             LexToken::Number { value, .. } => AstToken::Number(*value),
@@ -250,15 +271,13 @@ pub enum Ast {
 impl Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let fmt = match self {
-            Ast::Atom(a) => {
-                match a {
-                    AstToken::Number(n) => codecrafters::format_float(*n).to_string(),
-                    AstToken::String(s) => s.to_string(),
-                    AstToken::Identifier(s) => s.to_string(),
-                    AstToken::Expr(op) => format!("{op}"),
-                    AstToken::Eof => "".to_string(),
-                }
-            }
+            Ast::Atom(a) => match a {
+                AstToken::Number(n) => codecrafters::format_float(*n).to_string(),
+                AstToken::String(s) => s.to_string(),
+                AstToken::Identifier(s) => s.to_string(),
+                AstToken::Expr(op) => format!("{op}"),
+                AstToken::Eof => "".to_string(),
+            },
             Ast::Cons(head, rest) => {
                 let mut fmt = format!("({head} ");
 
@@ -275,21 +294,28 @@ impl Display for Ast {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+enum ParserError<'a> {
+    #[error("[line {line}] Error at {token}: Expect expression.")]
+    InvalidExpression { line: usize, token: &'a str },
+    #[error("[line {line}] Unexpected EOF.")]
+    UnexpectedEof { line: usize },
+}
+
 #[cfg(test)]
 mod tests {
-    use anyhow::bail;
-    use LexToken::Literal;
+    use super::*;
     use crate::token::KeywordToken;
     use crate::token::LexToken::Keyword;
-    use super::*;
+    use anyhow::bail;
+    use LexToken::Literal;
 
     #[test]
     fn single_digit() -> anyhow::Result<()> {
-        let p = &mut PrattParser::new(vec![
-            LexToken::Number {
-                raw: "1".to_string(),
-                value: 1.0,
-            }]);
+        let p = &mut PrattParser::new(vec![LexToken::Number {
+            raw: "1".to_string(),
+            value: 1.0,
+        }]);
         let ast = p.parse_expression(0)?;
         match ast {
             Ast::Atom(AstToken::Number(v)) => {
@@ -305,9 +331,15 @@ mod tests {
     #[test]
     fn simple_add_expression() -> anyhow::Result<()> {
         let tokens = vec![
-            LexToken::Number { raw: "1".to_string(), value: 1.0 },
+            LexToken::Number {
+                raw: "1".to_string(),
+                value: 1.0,
+            },
             Literal(LiteralToken::Plus),
-            LexToken::Number { raw: "2".to_string(), value: 2.0 },
+            LexToken::Number {
+                raw: "2".to_string(),
+                value: 2.0,
+            },
         ];
 
         let p = &mut PrattParser::new(tokens);
@@ -318,9 +350,7 @@ mod tests {
 
     #[test]
     fn true_exp() -> anyhow::Result<()> {
-        let p = &mut PrattParser::new(vec![
-            Keyword(KeywordToken::True),
-        ]);
+        let p = &mut PrattParser::new(vec![Keyword(KeywordToken::True)]);
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "true");
         Ok(())
@@ -328,9 +358,7 @@ mod tests {
 
     #[test]
     fn false_exp() -> anyhow::Result<()> {
-        let p = &mut PrattParser::new(vec![
-            Keyword(KeywordToken::False),
-        ]);
+        let p = &mut PrattParser::new(vec![Keyword(KeywordToken::False)]);
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "false");
         Ok(())
@@ -338,9 +366,7 @@ mod tests {
 
     #[test]
     fn nil_exp() -> anyhow::Result<()> {
-        let p = &mut PrattParser::new(vec![
-            Keyword(KeywordToken::Nil),
-        ]);
+        let p = &mut PrattParser::new(vec![Keyword(KeywordToken::Nil)]);
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "nil");
         Ok(())
@@ -364,7 +390,10 @@ mod tests {
     fn group_number_exp() -> anyhow::Result<()> {
         let p = &mut PrattParser::new(vec![
             Literal(LiteralToken::LeftParen),
-            LexToken::Number { raw: "1".to_string(), value: 1.0 },
+            LexToken::Number {
+                raw: "1".to_string(),
+                value: 1.0,
+            },
             Literal(LiteralToken::RightParen),
         ]);
         let ast = p.parse_expression(0)?;
@@ -396,20 +425,47 @@ mod tests {
         assert_eq!(format!("{ast}"), "(! (! true))");
         Ok(())
     }
-    
+
     #[test]
     fn comparison_ops() -> anyhow::Result<()> {
         let p = &mut PrattParser::new(vec![
-            LexToken::Number { raw: "40".to_string(), value: 40.0 },
+            LexToken::Number {
+                raw: "40".to_string(),
+                value: 40.0,
+            },
             Literal(LiteralToken::Less),
-            LexToken::Number { raw: "121".to_string(), value: 121.0 },
+            LexToken::Number {
+                raw: "121".to_string(),
+                value: 121.0,
+            },
             Literal(LiteralToken::Less),
-            LexToken::Number { raw: "202".to_string(), value: 202.0 },
+            LexToken::Number {
+                raw: "202".to_string(),
+                value: 202.0,
+            },
         ]);
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "(< (< 40.0 121.0) 202.0)");
-        
+
         Ok(())
-        
+    }
+
+    #[test]
+    fn syntax_error_unterminated_group() {
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::LeftParen),
+            LexToken::String { value: "baz".to_string() }
+        ]);
+
+        assert!(p.parse_expression(0).is_err());
+    }
+
+    #[test]
+    fn syntax_error_single_plus() {
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::Plus),
+        ]);
+
+        assert!(p.parse_expression(0).is_err());
     }
 }
