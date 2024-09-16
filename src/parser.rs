@@ -1,14 +1,14 @@
-use crate::token::{LiteralToken, Token};
+use crate::token::{LiteralToken, LexToken};
 use std::fmt::{self, Display};
 use crate::codecrafters;
 
 pub struct PrattParser {
-    tokens: Vec<Token>,
+    tokens: Vec<LexToken>,
     current: usize,
 }
 
 impl PrattParser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<LexToken>) -> Self {
         PrattParser {
             tokens,
             current: 0,
@@ -22,19 +22,23 @@ impl PrattParser {
     fn parse_expression(&mut self, min_bp: u8) -> anyhow::Result<Ast> {
         let mut lhs = match self.next_token() {
             Some(value) => match value {
-                AstToken::Expr(ExprType::Group('(', _)) => {
+                Ast::Atom(AstToken::Expr(ExprType::Group('(', _))) => {
                     let group = self.parse_expression(0)?;
-                    eprintln!("group: {group}");
+
                     // eat closing ')'
-                    self.next_token();
+                    let _ = self.next_token();
 
-                    // assert_eq!(self.next_token().unwrap(), AstToken::Expr(ExprType::Group(')', _)));
-                    // AstToken::Expr(Group('(', Box::new(group_expr)))
-
-                    Ast::Cons(value, vec![group])
-
+                    Ast::Cons(Box::from(value), vec![group])
                 }
-                AstToken::String(_) | AstToken::Number(_) | AstToken::Expr(_) => Ast::Atom(value),
+                Ast::Atom(AstToken::Expr(_)) => {
+                    if let Some((_, r_bp)) = self.prefix_binding_power(&value) {
+                        let rhs = self.parse_expression(r_bp)?;
+                        Ast::Cons(Box::from(value), vec![rhs])
+                    } else {
+                        value
+                    }
+                }
+                Ast::Atom(AstToken::String(_)) | Ast::Atom(AstToken::Number(_)) => value,
                 _ => Ast::Atom(AstToken::Eof),
             },
             None => panic!("bad token stream"),
@@ -42,36 +46,39 @@ impl PrattParser {
 
         #[allow(clippy::while_let_loop)]
         loop {
-            let token = match self.peek_token() {
-                Some(value) => match value {
-                    AstToken::Eof => break,
-                    AstToken::Expr(_) => value,
-                    t => panic!("bad token: {:?}", t),
+            let peek_token = match self.peek_token() {
+                Some(t) => match t {
+                    Ast::Atom(AstToken::Expr(_)) => t,
+                    Ast::Atom(AstToken::Eof) => break,
+                    bt => panic!("bad token: {bt:?}"),
                 },
-                None => break,
+                None => {
+                    break;
+                }
             };
 
-            if let Some((l_bp, ())) = self.postfix_binding_power(&token) {
+            if let Some((l_bp, ())) = self.postfix_binding_power(&lhs) {
                 if l_bp < min_bp {
                     break;
                 }
 
-                self.next_token();
+                let _ = self.next_token();
 
-                lhs = Ast::Cons(token, vec![lhs]);
+                lhs = Ast::Cons(Box::from(lhs), vec![peek_token]);
+
                 continue;
             }
 
-            if let Some((l_bp, r_bp)) = self.infix_binding_power(&token) {
+            if let Some((l_bp, r_bp)) = self.infix_binding_power(&peek_token) {
                 if l_bp < min_bp {
                     break;
                 }
 
-                self.next_token();
+                let _ = self.next_token();
 
                 let rhs = self.parse_expression(r_bp)?;
 
-                lhs = Ast::Cons(token, vec![lhs, rhs]);
+                lhs = Ast::Cons(Box::from(peek_token), vec![lhs, rhs]);
 
                 continue;
             };
@@ -82,20 +89,26 @@ impl PrattParser {
         Ok(lhs)
     }
 
-    fn next_token(&mut self) -> Option<AstToken> {
-        let token = self.tokens.get(self.current).map(|t| t.into());
+    fn next_token(&mut self) -> Option<Ast> {
+        let token = self.tokens.get(self.current).map(|t| Ast::Atom(t.into()));
         self.current += 1;
         token
     }
 
-    fn peek_token(&mut self) -> Option<AstToken> {
-        self.tokens.get(self.current + 1).map(|t| t.into())
+    fn peek_token(&mut self) -> Option<Ast> {
+        self.tokens.get(self.current).map(|t| Ast::Atom(t.into()))
     }
 
-    fn infix_binding_power(&mut self, token: &AstToken) -> Option<(u8, u8)> {
-        eprintln!("infix_binding_power({token})");
+    fn prefix_binding_power(&mut self, token: &Ast) -> Option<((), u8)> {
         match token {
-            AstToken::Expr(op) => match op {
+            Ast::Atom(AstToken::Expr(ExprType::Plus)) | Ast::Atom(AstToken::Expr(ExprType::Minus)) | Ast::Atom(AstToken::Expr(ExprType::Bang)) => Some(((), 9)),
+            _ => None,
+        }
+    }
+
+    fn infix_binding_power(&mut self, token: &Ast) -> Option<(u8, u8)> {
+        match token {
+            Ast::Atom(AstToken::Expr(op)) => match op {
                 ExprType::EqEq => Some((2, 1)),
                 ExprType::Plus | ExprType::Minus => Some((5, 6)),
                 ExprType::Star | ExprType::Slash => Some((7, 8)),
@@ -106,11 +119,9 @@ impl PrattParser {
         }
     }
 
-    fn postfix_binding_power(&self, token: &AstToken) -> Option<(u8, ())> {
-        match token {
-            AstToken::Expr(ExprType::Bang) => Some((7, ())),
-            _ => None,
-        }
+    // currently no postfix operators
+    fn postfix_binding_power(&self, _token: &Ast) -> Option<(u8, ())> {
+        None
     }
 }
 
@@ -184,22 +195,10 @@ pub enum AstToken {
     Eof,
 }
 
-impl Display for AstToken {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AstToken::Number(n) => write!(f, "{}", codecrafters::format_float(*n)),
-            AstToken::String(s) => write!(f, "{s}"),
-            AstToken::Identifier(s) => write!(f, "{s}"),
-            AstToken::Expr(op) => write!(f, "{op}"),
-            AstToken::Eof => Ok(()),
-        }
-    }
-}
-
-impl From<&Token> for AstToken {
-    fn from(value: &Token) -> Self {
+impl From<&LexToken> for AstToken {
+    fn from(value: &LexToken) -> Self {
         match value {
-            Token::Keyword(k) => match k {
+            LexToken::Keyword(k) => match k {
                 crate::token::KeywordToken::And => AstToken::Expr(ExprType::And),
                 crate::token::KeywordToken::Or => AstToken::Expr(ExprType::Or),
                 crate::token::KeywordToken::True => AstToken::Expr(ExprType::True),
@@ -213,13 +212,14 @@ impl From<&Token> for AstToken {
                 crate::token::KeywordToken::Nil => AstToken::Expr(ExprType::Nil),
                 _ => todo!("from keyword {k}"),
             },
-            Token::Literal(l) => match l {
+            LexToken::Literal(l) => match l {
                 LiteralToken::EqEq => AstToken::Expr(ExprType::EqEq),
                 LiteralToken::Plus => AstToken::Expr(ExprType::Plus),
                 LiteralToken::Minus => AstToken::Expr(ExprType::Minus),
                 LiteralToken::Star => AstToken::Expr(ExprType::Star),
                 LiteralToken::Slash => AstToken::Expr(ExprType::Slash),
                 LiteralToken::Dot => AstToken::Expr(ExprType::Dot),
+                LiteralToken::Bang => AstToken::Expr(ExprType::Bang),
                 // note/todo: using Eof as the group is a hack; need a placeholder; probably box isn't right also, need RefCell?
                 LiteralToken::LeftParen => AstToken::Expr(ExprType::Group('(', Box::new(AstToken::Eof))),
                 LiteralToken::RightParen => AstToken::Expr(ExprType::Group(')', Box::new(AstToken::Eof))),
@@ -227,10 +227,10 @@ impl From<&Token> for AstToken {
                 LiteralToken::RightBrace => AstToken::Expr(ExprType::Group('}', Box::new(AstToken::Eof))),
                 _ => todo!("from literal token {l}"),
             },
-            Token::Number { value, .. } => AstToken::Number(*value),
-            Token::Identifier { value } => AstToken::Identifier(value.clone()),
-            Token::String { value } => AstToken::String(value.clone()),
-            Token::Comment => todo!(),
+            LexToken::Number { value, .. } => AstToken::Number(*value),
+            LexToken::Identifier { value } => AstToken::Identifier(value.clone()),
+            LexToken::String { value } => AstToken::String(value.clone()),
+            LexToken::Comment => todo!("from comment to ?"),
         }
     }
 }
@@ -238,41 +238,58 @@ impl From<&Token> for AstToken {
 #[derive(Debug, Clone)]
 pub enum Ast {
     Atom(AstToken),
-    Cons(AstToken, Vec<Ast>),
+    Cons(Box<Ast>, Vec<Ast>),
 }
 
 impl Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Ast::Atom(i) => write!(f, "{}", i),
-            Ast::Cons(head, rest) => {
-                write!(f, "({} ", head)?;
-                for s in rest {
-                    write!(f, "{}", s)?
+        let fmt = match self {
+            Ast::Atom(a) => {
+                match a {
+                    AstToken::Number(n) => codecrafters::format_float(*n).to_string(),
+                    AstToken::String(s) => s.to_string(),
+                    AstToken::Identifier(s) => s.to_string(),
+                    AstToken::Expr(op) => format!("{op}"),
+                    AstToken::Eof => "".to_string(),
                 }
-                write!(f, ")")
+            },
+            Ast::Cons(head, rest) => {
+                let mut fmt = format!("({head} ");
+
+                for s in rest {
+                    fmt.push_str(format!("{s} ").as_str());
+                }
+
+                let cons = fmt.trim_end();
+                format!("{})", cons)
             }
-        }
+        };
+
+        write!(f, "{}", fmt.trim_end())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use anyhow::bail;
+    use LexToken::Literal;
     use crate::token::KeywordToken;
-    use crate::token::Token::Keyword;
+    use crate::token::LexToken::Keyword;
     use super::*;
 
     #[test]
     fn single_digit() -> anyhow::Result<()> {
         let p = &mut PrattParser::new(vec![
-            Token::Number {
+            LexToken::Number {
                 raw: "1".to_string(),
                 value: 1.0,
             }]);
-        match p.parse_expression(0)? {
+        let ast = p.parse_expression(0)?;
+        match ast {
             Ast::Atom(AstToken::Number(v)) => {
                 assert_eq!(v, 1.0);
+                assert_eq!(format!("{ast}"), "1.0");
+
                 Ok(())
             }
             _ => bail!("expected: Ast::Atom(AstToken::Number(1.0))"),
@@ -282,14 +299,14 @@ mod tests {
     #[test]
     fn simple_add_expression() -> anyhow::Result<()> {
         let tokens = vec![
-            Token::Number { raw: "1".to_string(), value: 1.0 },
-            Token::Literal(LiteralToken::Plus),
-            Token::Number { raw: "2".to_string(), value: 2.0 },
+            LexToken::Number { raw: "1".to_string(), value: 1.0 },
+            Literal(LiteralToken::Plus),
+            LexToken::Number { raw: "2".to_string(), value: 2.0 },
         ];
 
         let p = &mut PrattParser::new(tokens);
         let ast = p.parse_expression(0)?;
-        assert_eq!(format!("{ast}"), "(+ 1 2)");
+        assert_eq!(format!("{ast}"), "(+ 1.0 2.0)");
         Ok(())
     }
 
@@ -320,6 +337,59 @@ mod tests {
         ]);
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "nil");
+        Ok(())
+    }
+
+    #[test]
+    fn group_group_true_exp() -> anyhow::Result<()> {
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::LeftParen),
+            Literal(LiteralToken::LeftParen),
+            Keyword(KeywordToken::True),
+            Literal(LiteralToken::RightParen),
+            Literal(LiteralToken::RightParen),
+        ]);
+        let ast = p.parse_expression(0)?;
+        assert_eq!(format!("{ast}"), "(group (group true))");
+        Ok(())
+    }
+
+    #[test]
+    fn group_number_exp() -> anyhow::Result<()> {
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::LeftParen),
+            LexToken::Number { raw: "1".to_string(), value: 1.0 },
+            Literal(LiteralToken::RightParen),
+        ]);
+        let ast = p.parse_expression(0)?;
+        assert_eq!(format!("{ast}"), "(group 1.0)");
+        Ok(())
+    }
+    
+    #[test]
+    fn bang_true() -> anyhow::Result<()> {
+        // in: !true
+        // out: (! true)
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::Bang),
+            Keyword(KeywordToken::True),
+        ]);
+        let ast = p.parse_expression(0)?;
+        assert_eq!(format!("{ast}"), "(! true)");
+        Ok(())
+    }
+
+    #[test]
+    fn bang_bang_true() -> anyhow::Result<()> {
+        // in: !true
+        // out: (! (! true))
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::Bang),
+            Literal(LiteralToken::Bang),
+            Keyword(KeywordToken::True),
+        ]);
+        let ast = p.parse_expression(0)?;
+        assert_eq!(format!("{ast}"), "(! (! true))");
         Ok(())
     }
 }

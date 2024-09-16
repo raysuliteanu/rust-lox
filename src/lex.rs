@@ -7,11 +7,11 @@ use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
-use token::Token;
+use token::LexToken;
 
 #[derive(Debug)]
 pub struct Scanner {
-    pub tokens: Vec<Token>,
+    pub tokens: Vec<LexToken>,
     source: String,
     // next char in 'source' to read
     next_char_idx: usize,
@@ -55,7 +55,7 @@ impl Scanner {
             match token {
                 Ok(t) => match t {
                     // todo: how can we handle this better?
-                    Token::Comment => {}
+                    LexToken::Comment => {}
                     _ => {
                         if self.tokenization_only {
                             println!("{t}");
@@ -92,7 +92,7 @@ impl Scanner {
 }
 
 impl Iterator for Scanner {
-    type Item = Result<Token, Error>;
+    type Item = Result<LexToken, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         enum StartOfToken {
@@ -112,16 +112,16 @@ impl Iterator for Scanner {
             }
 
             let t = match c {
-                '(' => return Some(Ok(Token::Literal(LiteralToken::LeftParen))),
-                ')' => return Some(Ok(Token::Literal(LiteralToken::RightParen))),
-                '{' => return Some(Ok(Token::Literal(LiteralToken::LeftBrace))),
-                '}' => return Some(Ok(Token::Literal(LiteralToken::RightBrace))),
-                ',' => return Some(Ok(Token::Literal(LiteralToken::Comma))),
-                '.' => return Some(Ok(Token::Literal(LiteralToken::Dot))),
-                '-' => return Some(Ok(Token::Literal(LiteralToken::Minus))),
-                '+' => return Some(Ok(Token::Literal(LiteralToken::Plus))),
-                ';' => return Some(Ok(Token::Literal(LiteralToken::SemiColon))),
-                '*' => return Some(Ok(Token::Literal(LiteralToken::Star))),
+                '(' => return Some(Ok(LexToken::Literal(LiteralToken::LeftParen))),
+                ')' => return Some(Ok(LexToken::Literal(LiteralToken::RightParen))),
+                '{' => return Some(Ok(LexToken::Literal(LiteralToken::LeftBrace))),
+                '}' => return Some(Ok(LexToken::Literal(LiteralToken::RightBrace))),
+                ',' => return Some(Ok(LexToken::Literal(LiteralToken::Comma))),
+                '.' => return Some(Ok(LexToken::Literal(LiteralToken::Dot))),
+                '-' => return Some(Ok(LexToken::Literal(LiteralToken::Minus))),
+                '+' => return Some(Ok(LexToken::Literal(LiteralToken::Plus))),
+                ';' => return Some(Ok(LexToken::Literal(LiteralToken::SemiColon))),
+                '*' => return Some(Ok(LexToken::Literal(LiteralToken::Star))),
                 '"' => StartOfToken::StringLiteral,
                 '/' => StartOfToken::SlashOrComment,
                 '>' => StartOfToken::OpOrEqual(GreaterEq, Greater),
@@ -177,7 +177,7 @@ impl Iterator for Scanner {
 
                     self.next_char_idx = offset;
 
-                    Some(Ok(Token::Number {
+                    Some(Ok(LexToken::Number {
                         raw: String::from(&self.source[start..offset]),
                         value,
                     }))
@@ -186,7 +186,7 @@ impl Iterator for Scanner {
                     let offset = self.next_char_idx;
                     if let Some(length) = self.source[offset..].find('"') {
                         self.next_char_idx += length + 1;
-                        Some(Ok(Token::String {
+                        Some(Ok(LexToken::String {
                             value: String::from(&self.source[offset..offset + length]),
                         }))
                     } else {
@@ -206,13 +206,13 @@ impl Iterator for Scanner {
                     {
                         if let Some(pos) = self.source[self.next_char_idx..].find('\n') {
                             self.next_char_idx += pos + 1;
-                            Some(Ok(Token::Comment))
+                            Some(Ok(LexToken::Comment))
                         } else {
                             self.next_char_idx = self.source.len();
                             None
                         }
                     } else {
-                        Some(Ok(Token::Literal(LiteralToken::Slash)))
+                        Some(Ok(LexToken::Literal(LiteralToken::Slash)))
                     }
                 }
                 StartOfToken::OpOrEqual(l, r) => {
@@ -223,9 +223,9 @@ impl Iterator for Scanner {
                         .is_some_and(|c| c == '=')
                     {
                         self.next_char_idx += 1;
-                        Some(Ok(Token::Literal(l)))
+                        Some(Ok(LexToken::Literal(l)))
                     } else {
-                        Some(Ok(Token::Literal(r)))
+                        Some(Ok(LexToken::Literal(r)))
                     }
                 }
                 StartOfToken::KeywordOrIdentifier => {
@@ -237,23 +237,23 @@ impl Iterator for Scanner {
                     };
 
                     let token = match word {
-                        "and" => Some(Ok(Token::Keyword(token::KeywordToken::And))),
-                        "class" => Some(Ok(Token::Keyword(token::KeywordToken::Class))),
-                        "else" => Some(Ok(Token::Keyword(token::KeywordToken::Else))),
-                        "false" => Some(Ok(Token::Keyword(token::KeywordToken::False))),
-                        "for" => Some(Ok(Token::Keyword(token::KeywordToken::For))),
-                        "fun" => Some(Ok(Token::Keyword(token::KeywordToken::Fun))),
-                        "if" => Some(Ok(Token::Keyword(token::KeywordToken::If))),
-                        "nil" => Some(Ok(Token::Keyword(token::KeywordToken::Nil))),
-                        "or" => Some(Ok(Token::Keyword(token::KeywordToken::Or))),
-                        "print" => Some(Ok(Token::Keyword(token::KeywordToken::Print))),
-                        "return" => Some(Ok(Token::Keyword(token::KeywordToken::Return))),
-                        "super" => Some(Ok(Token::Keyword(token::KeywordToken::Super))),
-                        "this" => Some(Ok(Token::Keyword(token::KeywordToken::This))),
-                        "true" => Some(Ok(Token::Keyword(token::KeywordToken::True))),
-                        "var" => Some(Ok(Token::Keyword(token::KeywordToken::Var))),
-                        "while" => Some(Ok(Token::Keyword(token::KeywordToken::While))),
-                        _ => Some(Ok(Token::Identifier { value: String::from(&self.source[start..start + word.len()]) })),
+                        "and" => Some(Ok(LexToken::Keyword(token::KeywordToken::And))),
+                        "class" => Some(Ok(LexToken::Keyword(token::KeywordToken::Class))),
+                        "else" => Some(Ok(LexToken::Keyword(token::KeywordToken::Else))),
+                        "false" => Some(Ok(LexToken::Keyword(token::KeywordToken::False))),
+                        "for" => Some(Ok(LexToken::Keyword(token::KeywordToken::For))),
+                        "fun" => Some(Ok(LexToken::Keyword(token::KeywordToken::Fun))),
+                        "if" => Some(Ok(LexToken::Keyword(token::KeywordToken::If))),
+                        "nil" => Some(Ok(LexToken::Keyword(token::KeywordToken::Nil))),
+                        "or" => Some(Ok(LexToken::Keyword(token::KeywordToken::Or))),
+                        "print" => Some(Ok(LexToken::Keyword(token::KeywordToken::Print))),
+                        "return" => Some(Ok(LexToken::Keyword(token::KeywordToken::Return))),
+                        "super" => Some(Ok(LexToken::Keyword(token::KeywordToken::Super))),
+                        "this" => Some(Ok(LexToken::Keyword(token::KeywordToken::This))),
+                        "true" => Some(Ok(LexToken::Keyword(token::KeywordToken::True))),
+                        "var" => Some(Ok(LexToken::Keyword(token::KeywordToken::Var))),
+                        "while" => Some(Ok(LexToken::Keyword(token::KeywordToken::While))),
+                        _ => Some(Ok(LexToken::Identifier { value: String::from(&self.source[start..start + word.len()]) })),
                     };
 
                     self.next_char_idx += word.len() - 1; // -1 because we added one at the start
@@ -289,25 +289,25 @@ mod test {
 
         let actual = scanner.tokens;
         let expected = vec![
-            Token::Literal(LiteralToken::Slash),
-            Token::Literal(LiteralToken::LeftParen),
-            Token::Literal(LiteralToken::RightParen),
-            Token::Literal(LiteralToken::LeftBrace),
-            Token::Literal(LiteralToken::RightBrace),
-            Token::Literal(LiteralToken::SemiColon),
-            Token::Literal(LiteralToken::Comma),
-            Token::Literal(LiteralToken::Plus),
-            Token::Literal(LiteralToken::Minus),
-            Token::Literal(LiteralToken::Star),
-            Token::Literal(LiteralToken::EqEq),
-            Token::Literal(LiteralToken::Eq),
-            Token::Literal(LiteralToken::LessEq),
-            Token::Literal(LiteralToken::GreaterEq),
-            Token::Literal(LiteralToken::BangEq),
-            Token::Literal(LiteralToken::Less),
-            Token::Literal(LiteralToken::Greater),
-            Token::Literal(LiteralToken::Dot),
-            Token::Literal(LiteralToken::Bang),
+            LexToken::Literal(LiteralToken::Slash),
+            LexToken::Literal(LiteralToken::LeftParen),
+            LexToken::Literal(LiteralToken::RightParen),
+            LexToken::Literal(LiteralToken::LeftBrace),
+            LexToken::Literal(LiteralToken::RightBrace),
+            LexToken::Literal(LiteralToken::SemiColon),
+            LexToken::Literal(LiteralToken::Comma),
+            LexToken::Literal(LiteralToken::Plus),
+            LexToken::Literal(LiteralToken::Minus),
+            LexToken::Literal(LiteralToken::Star),
+            LexToken::Literal(LiteralToken::EqEq),
+            LexToken::Literal(LiteralToken::Eq),
+            LexToken::Literal(LiteralToken::LessEq),
+            LexToken::Literal(LiteralToken::GreaterEq),
+            LexToken::Literal(LiteralToken::BangEq),
+            LexToken::Literal(LiteralToken::Less),
+            LexToken::Literal(LiteralToken::Greater),
+            LexToken::Literal(LiteralToken::Dot),
+            LexToken::Literal(LiteralToken::Bang),
         ];
 
         check(actual, expected);
@@ -323,22 +323,22 @@ mod test {
 
         let actual = scanner.tokens;
         let expected = vec![
-            Token::Keyword(KeywordToken::And),
-            Token::Keyword(KeywordToken::Class),
-            Token::Keyword(KeywordToken::Else),
-            Token::Keyword(KeywordToken::False),
-            Token::Keyword(KeywordToken::For),
-            Token::Keyword(KeywordToken::Fun),
-            Token::Keyword(KeywordToken::If),
-            Token::Keyword(KeywordToken::Nil),
-            Token::Keyword(KeywordToken::Or),
-            Token::Keyword(KeywordToken::Print),
-            Token::Keyword(KeywordToken::Return),
-            Token::Keyword(KeywordToken::Super),
-            Token::Keyword(KeywordToken::This),
-            Token::Keyword(KeywordToken::True),
-            Token::Keyword(KeywordToken::Var),
-            Token::Keyword(KeywordToken::While),
+            LexToken::Keyword(KeywordToken::And),
+            LexToken::Keyword(KeywordToken::Class),
+            LexToken::Keyword(KeywordToken::Else),
+            LexToken::Keyword(KeywordToken::False),
+            LexToken::Keyword(KeywordToken::For),
+            LexToken::Keyword(KeywordToken::Fun),
+            LexToken::Keyword(KeywordToken::If),
+            LexToken::Keyword(KeywordToken::Nil),
+            LexToken::Keyword(KeywordToken::Or),
+            LexToken::Keyword(KeywordToken::Print),
+            LexToken::Keyword(KeywordToken::Return),
+            LexToken::Keyword(KeywordToken::Super),
+            LexToken::Keyword(KeywordToken::This),
+            LexToken::Keyword(KeywordToken::True),
+            LexToken::Keyword(KeywordToken::Var),
+            LexToken::Keyword(KeywordToken::While),
         ];
 
         check(actual, expected);
@@ -353,7 +353,7 @@ mod test {
         assert!(result.is_ok());
 
         let actual = scanner.tokens;
-        let expected = vec![Token::String {
+        let expected = vec![LexToken::String {
             value: "some string value".to_string(),
         }];
 
@@ -370,13 +370,13 @@ mod test {
 
         let actual = scanner.tokens;
         let expected = vec![
-            Token::Keyword(KeywordToken::Var),
-            Token::Identifier { value: "x".to_string() },
-            Token::Literal(LiteralToken::Eq),
-            Token::String {
+            LexToken::Keyword(KeywordToken::Var),
+            LexToken::Identifier { value: "x".to_string() },
+            LexToken::Literal(LiteralToken::Eq),
+            LexToken::String {
                 value: "some string value".to_string(),
             },
-            Token::Literal(LiteralToken::SemiColon),
+            LexToken::Literal(LiteralToken::SemiColon),
         ];
 
         check(actual, expected);
@@ -392,25 +392,25 @@ mod test {
 
         let actual = scanner.tokens;
         let expected = vec![
-            Token::Number {
+            LexToken::Number {
                 raw: "123".to_string(),
                 value: 123.0,
             },
-            Token::Number {
+            LexToken::Number {
                 raw: "123.456".to_string(),
                 value: 123.456,
             },
-            Token::Literal(LiteralToken::Dot),
-            Token::Number {
+            LexToken::Literal(LiteralToken::Dot),
+            LexToken::Number {
                 raw: "456".to_string(),
                 value: 456.0,
             },
-            Token::Number {
+            LexToken::Number {
                 raw: "123".to_string(),
                 value: 123.0,
             },
-            Token::Literal(LiteralToken::Dot),
-            Token::Number {
+            LexToken::Literal(LiteralToken::Dot),
+            LexToken::Number {
                 raw: "42.42".to_string(),
                 value: 42.42,
             },
@@ -429,19 +429,19 @@ mod test {
 
         let actual = scanner.tokens;
         let expected = vec![
-            Token::Literal(LiteralToken::LeftParen),
-            Token::Identifier { value: "foo".to_string(), },
-            Token::Literal(LiteralToken::Comma),
-            Token::Identifier { value: "bar".to_string(), },
-            Token::Literal(LiteralToken::Comma),
-            Token::Identifier { value: "baz".to_string(), },
-            Token::Literal(LiteralToken::RightParen),
+            LexToken::Literal(LiteralToken::LeftParen),
+            LexToken::Identifier { value: "foo".to_string(), },
+            LexToken::Literal(LiteralToken::Comma),
+            LexToken::Identifier { value: "bar".to_string(), },
+            LexToken::Literal(LiteralToken::Comma),
+            LexToken::Identifier { value: "baz".to_string(), },
+            LexToken::Literal(LiteralToken::RightParen),
         ];
 
         check(actual, expected);
     }
 
-    fn check(actual: Vec<Token>, expected: Vec<Token>) {
+    fn check(actual: Vec<LexToken>, expected: Vec<LexToken>) {
         assert_eq!(actual.len(), expected.len());
         assert_equal(actual, expected);
     }

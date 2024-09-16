@@ -1,4 +1,4 @@
-use crate::token::Token;
+use crate::token::LexToken;
 use clap::{Parser, Subcommand};
 use lex::Scanner;
 use std::path::PathBuf;
@@ -38,14 +38,14 @@ fn main() {
             let _ = tokenize(filename, false).and_then(|tokens| {
                 let parser = parser::PrattParser::new(tokens);
                 let ast = parser.parse()?;
-                println!("{ast}");
+                println!("{}", format!("{ast}").trim());
                 Ok(())
             });
         }
     }
 }
 
-fn tokenize(filename: &PathBuf, tokenization_only: bool) -> anyhow::Result<Vec<Token>> {
+fn tokenize(filename: &PathBuf, tokenization_only: bool) -> anyhow::Result<Vec<LexToken>> {
     let mut scanner = Scanner::new(filename, tokenization_only)?;
     scanner.tokenize()?;
     if scanner.has_tokenization_err() {

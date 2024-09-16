@@ -2,7 +2,7 @@ use std::fmt::Display;
 use crate::codecrafters;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Token {
+pub enum LexToken {
     Keyword(KeywordToken),
     Literal(LiteralToken),
     Number {
@@ -18,15 +18,15 @@ pub enum Token {
     Comment,
 }
 
-impl Display for Token {
+impl Display for LexToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Token::Keyword(t) => write!(f, "{t}"),
-            Token::Literal(t) => write!(f, "{t}"),
-            Token::Number { raw, value } => write!(f, "NUMBER {raw} {}", codecrafters::format_float(*value)),
-            Token::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
-            Token::String { value } => write!(f, "STRING \"{value}\" {value}"),
-            Token::Comment => {
+            LexToken::Keyword(t) => write!(f, "{t}"),
+            LexToken::Literal(t) => write!(f, "{t}"),
+            LexToken::Number { raw, value } => write!(f, "NUMBER {raw} {}", codecrafters::format_float(*value)),
+            LexToken::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
+            LexToken::String { value } => write!(f, "STRING \"{value}\" {value}"),
+            LexToken::Comment => {
                 // ignore
                 Ok(())
             }
