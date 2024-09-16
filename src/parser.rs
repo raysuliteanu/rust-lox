@@ -219,6 +219,7 @@ impl From<&LexToken> for AstToken {
                 LiteralToken::Greater => AstToken::Expr(ExprType::Greater),
                 LiteralToken::GreaterEq => AstToken::Expr(ExprType::GreaterEq),
                 LiteralToken::EqEq => AstToken::Expr(ExprType::EqEq),
+                LiteralToken::BangEq => AstToken::Expr(ExprType::BangEq),
                 LiteralToken::Plus => AstToken::Expr(ExprType::Plus),
                 LiteralToken::Minus => AstToken::Expr(ExprType::Minus),
                 LiteralToken::Star => AstToken::Expr(ExprType::Star),
