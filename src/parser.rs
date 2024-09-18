@@ -1,5 +1,7 @@
 use crate::codecrafters;
+use crate::error::{InterpreterResult, ParserError};
 use crate::token::{LexToken, LiteralToken};
+use log::{debug, trace};
 use std::fmt::{self, Display};
 
 pub struct PrattParser {
@@ -12,27 +14,43 @@ impl PrattParser {
         PrattParser { tokens, current: 0 }
     }
 
-    pub fn parse(mut self) -> anyhow::Result<Ast> {
+    pub fn parse(mut self) -> InterpreterResult<Ast> {
         self.parse_expression(0)
     }
 
-    fn parse_expression(&mut self, min_bp: u8) -> anyhow::Result<Ast> {
+    fn parse_expression(&mut self, min_bp: u8) -> InterpreterResult<Ast> {
+        trace!("parse_expression(${min_bp})");
+
         let mut lhs = match self.next_token() {
             Some(value) => match value {
                 Ast::Atom(AstToken::Expr(ExprType::Group('(', _))) => {
+                    trace!("matched '('");
+
                     let group = self.parse_expression(0)?;
+
+                    debug!("parsed: {group}");
 
                     // check for closing ')'
                     match self.next_token() {
-                        None => return Err(ParserError::UnexpectedEof { line: 0 }.into()),
+                        // todo: line number needs to be set correctly
+                        None => {
+                            debug!("unexpected EOF looking for ')'");
+
+                            return Err(ParserError::UnexpectedEof { line: 0 }.into());
+                        }
                         Some(t) => match t {
-                            Ast::Atom(AstToken::Expr(ExprType::Group(')', _))) => {}
+                            Ast::Atom(AstToken::Expr(ExprType::Group(')', _))) => {
+                                trace!("matched closing ')'");
+                            }
                             _ => {
+                                debug!("found '{t}' expected ')'");
+
                                 return Err(ParserError::InvalidExpression {
+                                    // todo: line number needs to be set correctly
                                     line: 0,
                                     token: ")",
                                 }
-                                .into())
+                                .into());
                             }
                         },
                     }
@@ -50,7 +68,11 @@ impl PrattParser {
                 Ast::Atom(AstToken::String(_)) | Ast::Atom(AstToken::Number(_)) => value,
                 _ => Ast::Atom(AstToken::Eof),
             },
-            None => return Err(ParserError::UnexpectedEof { line: 0 }.into()),
+            None => {
+                debug!("unexpected EOF looking for lhs token");
+                // todo: line number needs to be set correctly
+                return Err(ParserError::UnexpectedEof { line: 0 }.into());
+            }
         };
 
         #[allow(clippy::while_let_loop)]
@@ -62,32 +84,47 @@ impl PrattParser {
                     bt => panic!("bad token: {bt:?}"),
                 },
                 None => {
+                    trace!("peek_token() returned None");
                     break;
                 }
             };
 
+            debug!("peek_token = {peek_token}");
+
             if let Some((l_bp, ())) = self.postfix_binding_power(&lhs) {
+                debug!("l_bp = {l_bp}");
+                
                 if l_bp < min_bp {
+                    trace!("l_bp({l_bp}) < min_bp({min_bp})");
                     break;
                 }
 
-                let _ = self.next_token();
+                let nt = self.next_token();
+                debug!("discarding next token = {nt:?}");
 
                 lhs = Ast::Cons(Box::from(lhs), vec![peek_token]);
-
+                
+                debug!("lhs = {lhs}");
+                
                 continue;
             }
 
             if let Some((l_bp, r_bp)) = self.infix_binding_power(&peek_token) {
+                debug!("(l_bp({l_bp}), r_bp({r_bp}))");
+
                 if l_bp < min_bp {
+                    trace!("l_bp({l_bp}) < min_bp({min_bp})");
                     break;
                 }
 
-                let _ = self.next_token();
+                let nt = self.next_token();
+                debug!("discarding next token = {nt:?}");
 
                 let rhs = self.parse_expression(r_bp)?;
 
                 lhs = Ast::Cons(Box::from(peek_token), vec![lhs, rhs]);
+
+                debug!("lhs = {lhs}");
 
                 continue;
             };
@@ -294,24 +331,15 @@ impl Display for Ast {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-enum ParserError<'a> {
-    #[error("[line {line}] Error at {token}: Expect expression.")]
-    InvalidExpression { line: usize, token: &'a str },
-    #[error("[line {line}] Unexpected EOF.")]
-    UnexpectedEof { line: usize },
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::token::KeywordToken;
     use crate::token::LexToken::Keyword;
-    use anyhow::bail;
     use LexToken::Literal;
 
     #[test]
-    fn single_digit() -> anyhow::Result<()> {
+    fn single_digit() -> InterpreterResult<()> {
         let p = &mut PrattParser::new(vec![LexToken::Number {
             raw: "1".to_string(),
             value: 1.0,
@@ -324,12 +352,12 @@ mod tests {
 
                 Ok(())
             }
-            _ => bail!("expected: Ast::Atom(AstToken::Number(1.0))"),
+            _ => panic!("expected: Ast::Atom(AstToken::Number(1.0))"),
         }
     }
 
     #[test]
-    fn simple_add_expression() -> anyhow::Result<()> {
+    fn simple_add_expression() -> InterpreterResult<()> {
         let tokens = vec![
             LexToken::Number {
                 raw: "1".to_string(),
@@ -349,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn true_exp() -> anyhow::Result<()> {
+    fn true_exp() -> InterpreterResult<()> {
         let p = &mut PrattParser::new(vec![Keyword(KeywordToken::True)]);
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "true");
@@ -357,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn false_exp() -> anyhow::Result<()> {
+    fn false_exp() -> InterpreterResult<()> {
         let p = &mut PrattParser::new(vec![Keyword(KeywordToken::False)]);
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "false");
@@ -365,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn nil_exp() -> anyhow::Result<()> {
+    fn nil_exp() -> InterpreterResult<()> {
         let p = &mut PrattParser::new(vec![Keyword(KeywordToken::Nil)]);
         let ast = p.parse_expression(0)?;
         assert_eq!(format!("{ast}"), "nil");
@@ -373,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn group_group_true_exp() -> anyhow::Result<()> {
+    fn group_group_true_exp() -> InterpreterResult<()> {
         let p = &mut PrattParser::new(vec![
             Literal(LiteralToken::LeftParen),
             Literal(LiteralToken::LeftParen),
@@ -387,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn group_number_exp() -> anyhow::Result<()> {
+    fn group_number_exp() -> InterpreterResult<()> {
         let p = &mut PrattParser::new(vec![
             Literal(LiteralToken::LeftParen),
             LexToken::Number {
@@ -402,7 +430,7 @@ mod tests {
     }
 
     #[test]
-    fn bang_true() -> anyhow::Result<()> {
+    fn bang_true() -> InterpreterResult<()> {
         // in: !true
         // out: (! true)
         let p = &mut PrattParser::new(vec![
@@ -415,7 +443,7 @@ mod tests {
     }
 
     #[test]
-    fn bang_bang_true() -> anyhow::Result<()> {
+    fn bang_bang_true() -> InterpreterResult<()> {
         let p = &mut PrattParser::new(vec![
             Literal(LiteralToken::Bang),
             Literal(LiteralToken::Bang),
@@ -427,7 +455,7 @@ mod tests {
     }
 
     #[test]
-    fn comparison_ops() -> anyhow::Result<()> {
+    fn comparison_ops() -> InterpreterResult<()> {
         let p = &mut PrattParser::new(vec![
             LexToken::Number {
                 raw: "40".to_string(),
@@ -454,7 +482,9 @@ mod tests {
     fn syntax_error_unterminated_group() {
         let p = &mut PrattParser::new(vec![
             Literal(LiteralToken::LeftParen),
-            LexToken::String { value: "baz".to_string() }
+            LexToken::String {
+                value: "baz".to_string(),
+            },
         ]);
 
         assert!(p.parse_expression(0).is_err());
@@ -462,9 +492,7 @@ mod tests {
 
     #[test]
     fn syntax_error_single_plus() {
-        let p = &mut PrattParser::new(vec![
-            Literal(LiteralToken::Plus),
-        ]);
+        let p = &mut PrattParser::new(vec![Literal(LiteralToken::Plus)]);
 
         assert!(p.parse_expression(0).is_err());
     }

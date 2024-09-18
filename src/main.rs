@@ -1,11 +1,16 @@
+use crate::error::{InterpreterResult};
+use crate::parser::Ast;
 use crate::token::LexToken;
-use anyhow::Error;
 use clap::{Parser, Subcommand};
 use lex::Scanner;
+use std::error::Error;
 use std::path::PathBuf;
 use std::str;
+use crate::interpreter::ExprResult;
 
 mod codecrafters;
+mod error;
+mod interpreter;
 mod lex;
 mod parser;
 mod token;
@@ -20,41 +25,42 @@ struct Lox {
 enum LoxCommands {
     Tokenize { filename: PathBuf },
     Parse { filename: PathBuf },
+    Evaluate { filename: PathBuf },
 }
 
-fn main() {
+fn main() -> InterpreterResult<()> {
     let lox = Lox::parse();
 
     match &lox.commands {
-        LoxCommands::Tokenize { filename } => {
-            let res = tokenize(filename, true);
-
-            if res.is_err() {
-                std::process::exit(65);
-            }
-        }
-        LoxCommands::Parse { filename } => {
-            let _ = tokenize(filename, false)
-                .map_err(|_| std::process::exit(65))
-                .and_then(|tokens| {
-                    let parser = parser::PrattParser::new(tokens);
-                    parser
-                        .parse()
-                        .map_err(|_| std::process::exit(65))
-                        .map(|ast| {
-                            println!("{}", format!("{ast}").trim());
-                        })
-                });
+        LoxCommands::Tokenize { filename } => tokenize(filename, true).map(|_| {
+            Ok(()) 
+        }),
+        LoxCommands::Parse { filename } => parse(tokenize(filename, false)?).map(|ast| {
+            println!("{ast}");
+            Ok(())
+        }),
+        LoxCommands::Evaluate { filename } => {
+            evaluate(parse(tokenize(filename, false)?)?).map(|expr| {
+                println!("{expr}");
+                Ok(()) 
+            })
         }
     }
+    .map_err(|_: Box<dyn Error>| std::process::exit(65))
+    .unwrap()
 }
 
-fn tokenize(filename: &PathBuf, tokenization_only: bool) -> anyhow::Result<Vec<LexToken>> {
-    let mut scanner = Scanner::new(filename, tokenization_only)?;
-    scanner.tokenize()?;
-    if scanner.has_tokenization_err() {
-        return Err(Error::msg("Tokenization failed"));
-    }
+fn tokenize(filename: &PathBuf, tokenization_only: bool) -> InterpreterResult<Vec<LexToken>> {
+    let mut scanner = Scanner::new(filename)?;
+    scanner.tokenize(tokenization_only)
+}
 
-    Ok(scanner.tokens)
+fn parse(tokens: Vec<LexToken>) -> InterpreterResult<Ast> {
+    let parser = parser::PrattParser::new(tokens);
+    parser.parse()
+}
+
+fn evaluate(ast: Ast) -> InterpreterResult<ExprResult> {
+    let interpreter = interpreter::Interpreter::new(ast);
+    interpreter.interpret()
 }

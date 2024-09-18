@@ -1,10 +1,10 @@
+use crate::error::{InterpreterResult, LexerError};
 use crate::token;
 use crate::token::LiteralToken;
 use crate::token::LiteralToken::{Bang, BangEq, Eq, EqEq, Greater, GreaterEq, Less, LessEq};
-use anyhow::Error;
 use itertools::Itertools;
+use std::error::Error;
 use std::fs::File;
-use std::io;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
 use token::LexToken;
@@ -17,12 +17,10 @@ pub struct Scanner {
     next_char_idx: usize,
     // save it for the future ... might want to print filename in errors
     _filename: PathBuf,
-    has_tokenization_err: bool,
-    tokenization_only: bool,
 }
 
 impl Scanner {
-    pub fn new(filename: &PathBuf, tokenization_only: bool) -> io::Result<Self> {
+    pub fn new(filename: &PathBuf) -> InterpreterResult<Self> {
         let file = File::open(filename)?;
         let mut reader = BufReader::new(file);
         let mut source = String::new();
@@ -33,8 +31,6 @@ impl Scanner {
             source,
             next_char_idx: 0,
             _filename: filename.clone(),
-            has_tokenization_err: false,
-            tokenization_only,
         })
     }
 
@@ -45,19 +41,18 @@ impl Scanner {
             source: String::from(input),
             next_char_idx: 0,
             _filename: PathBuf::from(""),
-            has_tokenization_err: false,
-            tokenization_only: true,
         }
     }
 
-    pub fn tokenize(&mut self) -> anyhow::Result<()> {
+    pub fn tokenize(&mut self, tokenization_only: bool) -> InterpreterResult<Vec<LexToken>> {
+        let mut tokenization_error: Option<Box<dyn Error>> = None;
         while let Some(token) = self.next() {
             match token {
                 Ok(t) => match t {
                     // todo: how can we handle this better?
                     LexToken::Comment => {}
                     _ => {
-                        if self.tokenization_only {
+                        if tokenization_only {
                             println!("{t}");
                         }
                         self.tokens.push(t);
@@ -66,7 +61,7 @@ impl Scanner {
                 Err(e) => {
                     if e.downcast_ref::<LexerError>().is_some() {
                         eprintln!("{e}");
-                        self.has_tokenization_err = true;
+                        tokenization_error = Some(e);
                         continue;
                     }
 
@@ -75,24 +70,24 @@ impl Scanner {
             }
         }
 
-        if self.tokenization_only {
+        if tokenization_only {
             println!("EOF  null");
         }
 
-        Ok(())
+        if let Some(error) = tokenization_error {
+            Err(error)
+        } else {
+            Ok(self.tokens.clone())
+        }
     }
 
     fn current_line(&self) -> usize {
         self.source[..self.next_char_idx].lines().count()
     }
-
-    pub fn has_tokenization_err(&self) -> bool {
-        self.has_tokenization_err
-    }
 }
 
 impl Iterator for Scanner {
-    type Item = Result<LexToken, Error>;
+    type Item = InterpreterResult<LexToken>;
 
     fn next(&mut self) -> Option<Self::Item> {
         enum StartOfToken {
@@ -269,14 +264,6 @@ impl Iterator for Scanner {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-enum LexerError {
-    #[error("[line {line}] Error: Unexpected character: {token}")]
-    InvalidToken { line: usize, token: char },
-    #[error("[line {line}] Error: Unterminated string.")]
-    UnterminatedString { line: usize },
-}
-
 #[cfg(test)]
 mod test {
     use itertools::assert_equal;
@@ -287,7 +274,7 @@ mod test {
     #[test]
     fn punctuation() {
         let mut scanner = Scanner::new_from_string("/(){};,+-*===<=>=!=<>.!");
-        let result = scanner.tokenize();
+        let result = scanner.tokenize(false);
 
         assert!(result.is_ok());
 
@@ -322,7 +309,7 @@ mod test {
         let keywords =
             "and class else false for fun if nil or print return super this true var while";
         let mut scanner = Scanner::new_from_string(keywords);
-        let result = scanner.tokenize();
+        let result = scanner.tokenize(false);
 
         assert!(result.is_ok());
 
@@ -353,7 +340,7 @@ mod test {
     fn string_literals() {
         let input = "\"some string value\"";
         let mut scanner = Scanner::new_from_string(input);
-        let result = scanner.tokenize();
+        let result = scanner.tokenize(false);
 
         assert!(result.is_ok());
 
@@ -369,7 +356,7 @@ mod test {
     fn string_literals_with_other_stuff() {
         let input = "var x = \"some string value\";";
         let mut scanner = Scanner::new_from_string(input);
-        let result = scanner.tokenize();
+        let result = scanner.tokenize(false);
 
         assert!(result.is_ok());
 
@@ -393,7 +380,7 @@ mod test {
     fn numbers() {
         let input = "123 123.456 .456 123. 42.42";
         let mut scanner = Scanner::new_from_string(input);
-        let result = scanner.tokenize();
+        let result = scanner.tokenize(false);
 
         assert!(result.is_ok());
 
@@ -430,7 +417,7 @@ mod test {
     fn identifiers() {
         let input = "(foo, bar, baz)";
         let mut scanner = Scanner::new_from_string(input);
-        let result = scanner.tokenize();
+        let result = scanner.tokenize(false);
 
         assert!(result.is_ok());
 
