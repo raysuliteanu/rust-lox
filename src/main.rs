@@ -1,4 +1,5 @@
-use crate::error::{InterpreterResult};
+use crate::error::InterpreterResult;
+use crate::interpreter::ExprResult;
 use crate::parser::Ast;
 use crate::token::LexToken;
 use clap::{Parser, Subcommand};
@@ -6,7 +7,6 @@ use lex::Scanner;
 use std::error::Error;
 use std::path::PathBuf;
 use std::str;
-use crate::interpreter::ExprResult;
 
 mod codecrafters;
 mod error;
@@ -33,18 +33,25 @@ fn main() -> InterpreterResult<()> {
 
     match &lox.commands {
         LoxCommands::Tokenize { filename } => tokenize(filename, true).map(|_| {
-            Ok(()) 
-        }),
-        LoxCommands::Parse { filename } => parse(tokenize(filename, false)?).map(|ast| {
-            println!("{ast}");
+            eprintln!("tokenize: ok");
             Ok(())
         }),
-        LoxCommands::Evaluate { filename } => {
-            evaluate(parse(tokenize(filename, false)?)?).map(|expr| {
-                println!("{expr}");
-                Ok(()) 
+        LoxCommands::Parse { filename } => tokenize(filename, false).and_then(|tokens| {
+            parse(tokens).map(|ast| {
+                eprintln!("parse: ok");
+                println!("{ast}");
+                Ok(())
             })
-        }
+        }),
+        LoxCommands::Evaluate { filename } => tokenize(filename, false).and_then(|tokens| {
+            parse(tokens).and_then(|ast| {
+                evaluate(ast).map(|expr| {
+                    eprintln!("evaluate: ok");
+                    println!("{expr}");
+                    Ok(())
+                })
+            })
+        }),
     }
     .map_err(|_: Box<dyn Error>| std::process::exit(65))
     .unwrap()
