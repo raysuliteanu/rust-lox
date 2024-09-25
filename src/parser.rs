@@ -2,7 +2,7 @@ use crate::codecrafters;
 use crate::error::{InterpreterResult, ParserError};
 use crate::token::{LexToken, LiteralToken};
 use log::{debug, trace};
-use std::fmt::{self, Display};
+use std::fmt::{self, Display, Formatter};
 
 pub struct PrattParser {
     tokens: Vec<LexToken>,
@@ -21,66 +21,64 @@ impl PrattParser {
     fn parse_expression(&mut self, min_bp: u8) -> InterpreterResult<Ast> {
         trace!("parse_expression(${min_bp})");
 
-        let mut lhs = match self.next_token() {
-            Some(value) => match value {
-                Ast::Atom(AstToken::Expr(ExprType::Group('(', _))) => {
-                    trace!("matched '('");
+        let mut lhs = if self.expect_token(LexToken::Literal(LiteralToken::LeftParen)) {
+            trace!("matched '('");
+            self.advance();
 
-                    let group = self.parse_expression(0)?;
+            let group = self.parse_expression(0)?;
 
-                    debug!("parsed: {group}");
+            debug!("parsed: {group}");
 
-                    // check for closing ')'
-                    match self.next_token() {
-                        // todo: line number needs to be set correctly
-                        None => {
-                            debug!("unexpected EOF looking for ')'");
-
-                            return Err(ParserError::UnexpectedEof { line: 0 }.into());
+            if self.expect_token(LexToken::Literal(LiteralToken::RightParen)) {
+                self.advance();
+                Ast::Cons(Box::new(Ast::Atom(AstToken::GroupStart)), vec![group])
+            } else {
+                return Err(ParserError::InvalidExpression {
+                    // todo: line number needs to be set correctly
+                    line: 0,
+                    token: ")",
+                }
+                .into());
+            }
+        } else {
+            match self.next_token() {
+                Some(ast) => match ast {
+                    Ast::Atom(AstToken::Expr(_)) => {
+                        if let Some((_, r_bp)) = self.prefix_binding_power(&ast) {
+                            let rhs = self.parse_expression(r_bp)?;
+                            Ast::Cons(Box::from(ast), vec![rhs])
+                        } else {
+                            ast
                         }
-                        Some(t) => match t {
-                            Ast::Atom(AstToken::Expr(ExprType::Group(')', _))) => {
-                                trace!("matched closing ')'");
-                            }
-                            _ => {
-                                debug!("found '{t}' expected ')'");
-
-                                return Err(ParserError::InvalidExpression {
-                                    // todo: line number needs to be set correctly
-                                    line: 0,
-                                    token: ")",
-                                }
-                                .into());
-                            }
-                        },
                     }
-
-                    Ast::Cons(Box::from(value), vec![group])
-                }
-                Ast::Atom(AstToken::Expr(_)) => {
-                    if let Some((_, r_bp)) = self.prefix_binding_power(&value) {
-                        let rhs = self.parse_expression(r_bp)?;
-                        Ast::Cons(Box::from(value), vec![rhs])
-                    } else {
-                        value
+                    Ast::Atom(AstToken::Number(_))
+                    | Ast::Atom(AstToken::String(_))
+                    | Ast::Atom(AstToken::Identifier(_))
+                    | Ast::Atom(AstToken::Eof) => ast,
+                    _ => {
+                        return Err(ParserError::InvalidExpression {
+                            line: 0,
+                            token: ")", // todo: right now that's the issue but need to be able to have the actual token
+                        }
+                        .into())
                     }
-                }
-                Ast::Atom(AstToken::String(_)) | Ast::Atom(AstToken::Number(_)) => value,
-                _ => Ast::Atom(AstToken::Eof),
-            },
-            None => {
-                debug!("unexpected EOF looking for lhs token");
-                // todo: line number needs to be set correctly
-                return Err(ParserError::UnexpectedEof { line: 0 }.into());
+                },
+                None => return Err(ParserError::UnexpectedEof { line: 0 }.into()),
             }
         };
 
         #[allow(clippy::while_let_loop)]
         loop {
-            let peek_token = match self.peek_token() {
+            let ast = if self.expect_token(LexToken::Literal(LiteralToken::LeftParen)) {
+                Some(self.parse_expression(min_bp)?)
+            } else {
+                self.peek_token()
+            };
+
+            let peek_token = match ast {
                 Some(t) => match t {
                     Ast::Atom(AstToken::Expr(_)) => t,
-                    Ast::Atom(AstToken::Eof) => break,
+                    Ast::Atom(AstToken::Eof) | Ast::Atom(AstToken::GroupEnd) => break,
                     bt => panic!("bad token: {bt:?}"),
                 },
                 None => {
@@ -93,7 +91,7 @@ impl PrattParser {
 
             if let Some((l_bp, ())) = self.postfix_binding_power(&lhs) {
                 debug!("l_bp = {l_bp}");
-                
+
                 if l_bp < min_bp {
                     trace!("l_bp({l_bp}) < min_bp({min_bp})");
                     break;
@@ -103,9 +101,9 @@ impl PrattParser {
                 debug!("discarding next token = {nt:?}");
 
                 lhs = Ast::Cons(Box::from(lhs), vec![peek_token]);
-                
+
                 debug!("lhs = {lhs}");
-                
+
                 continue;
             }
 
@@ -139,6 +137,18 @@ impl PrattParser {
         let token = self.tokens.get(self.current).map(|t| Ast::Atom(t.into()));
         self.current += 1;
         token
+    }
+
+    fn advance(&mut self) {
+        trace!("advancing from {} to {}", self.current, self.current + 1);
+        self.current += 1;
+    }
+
+    fn expect_token(&mut self, lex_token: LexToken) -> bool {
+        trace!("expect_token({lex_token}");
+        self.tokens
+            .get(self.current)
+            .is_some_and(|t| *t == lex_token)
     }
 
     fn peek_token(&mut self) -> Option<Ast> {
@@ -202,7 +212,6 @@ pub enum ExprType {
     While,
     Print,
     Nil,
-    Group(char, Box<AstToken>),
 }
 
 impl Display for ExprType {
@@ -232,7 +241,6 @@ impl Display for ExprType {
             ExprType::Greater => write!(f, ">"),
             ExprType::GreaterEq => write!(f, ">="),
             ExprType::Slash => write!(f, "/"),
-            ExprType::Group(_, _) => write!(f, "group"),
         }
     }
 }
@@ -244,6 +252,21 @@ pub enum AstToken {
     Identifier(String),
     Expr(ExprType),
     Eof,
+    GroupStart,
+    GroupEnd,
+}
+
+impl Display for AstToken {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            AstToken::Number(n) => write!(f, "{}", codecrafters::format_float(*n)),
+            AstToken::Identifier(s) | AstToken::String(s) => write!(f, "{s}"),
+            AstToken::Expr(op) => write!(f, "{op}"),
+            AstToken::Eof => write!(f, "<eof>"),
+            AstToken::GroupStart => write!(f, "<gs>"),
+            AstToken::GroupEnd => write!(f, "<ge>"),
+        }
+    }
 }
 
 impl From<&LexToken> for AstToken {
@@ -276,19 +299,8 @@ impl From<&LexToken> for AstToken {
                 LiteralToken::Slash => AstToken::Expr(ExprType::Slash),
                 LiteralToken::Dot => AstToken::Expr(ExprType::Dot),
                 LiteralToken::Bang => AstToken::Expr(ExprType::Bang),
-                // note/todo: using Eof as the group is a hack; need a placeholder; probably box isn't right also, need RefCell?
-                LiteralToken::LeftParen => {
-                    AstToken::Expr(ExprType::Group('(', Box::new(AstToken::Eof)))
-                }
-                LiteralToken::RightParen => {
-                    AstToken::Expr(ExprType::Group(')', Box::new(AstToken::Eof)))
-                }
-                LiteralToken::LeftBrace => {
-                    AstToken::Expr(ExprType::Group('{', Box::new(AstToken::Eof)))
-                }
-                LiteralToken::RightBrace => {
-                    AstToken::Expr(ExprType::Group('}', Box::new(AstToken::Eof)))
-                }
+                LiteralToken::LeftParen | LiteralToken::LeftBrace => AstToken::GroupStart,
+                LiteralToken::RightParen | LiteralToken::RightBrace => AstToken::GroupEnd,
                 _ => todo!("from literal token {l}"),
             },
             LexToken::Number { value, .. } => AstToken::Number(*value),
@@ -299,7 +311,7 @@ impl From<&LexToken> for AstToken {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Ast {
     Atom(AstToken),
     Cons(Box<Ast>, Vec<Ast>),
@@ -308,15 +320,15 @@ pub enum Ast {
 impl Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let fmt = match self {
-            Ast::Atom(a) => match a {
-                AstToken::Number(n) => codecrafters::format_float(*n).to_string(),
-                AstToken::String(s) => s.to_string(),
-                AstToken::Identifier(s) => s.to_string(),
-                AstToken::Expr(op) => format!("{op}"),
-                AstToken::Eof => "".to_string(),
-            },
+            Ast::Atom(a) => format!("{a}"),
             Ast::Cons(head, rest) => {
-                let mut fmt = format!("({head} ");
+                let mut fmt = "(".to_string();
+
+                if **head != Ast::Atom(AstToken::GroupStart) {
+                    fmt.push_str(format!("{head} ").as_str());
+                } else {
+                    fmt.push_str("group ");
+                }
 
                 for s in rest {
                     fmt.push_str(format!("{s} ").as_str());
@@ -335,7 +347,7 @@ impl Display for Ast {
 mod tests {
     use super::*;
     use crate::token::KeywordToken;
-    use crate::token::LexToken::Keyword;
+    use crate::token::LexToken::{Keyword, Number};
     use LexToken::Literal;
 
     #[test]
@@ -491,8 +503,32 @@ mod tests {
     }
 
     #[test]
+    fn syntax_error_unterminated_group_with_identifier() {
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::LeftParen),
+            LexToken::Identifier {
+                value: "baz".to_string(),
+            },
+        ]);
+
+        assert!(p.parse_expression(0).is_err());
+    }
+
+    #[test]
     fn syntax_error_single_plus() {
         let p = &mut PrattParser::new(vec![Literal(LiteralToken::Plus)]);
+
+        assert!(p.parse_expression(0).is_err());
+    }
+
+    #[test]
+    fn syntax_error_invalid_addition_expr() {
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::LeftParen),
+            Number { value: 27.0, raw: "27".to_string() },
+            Literal(LiteralToken::Plus),
+            Literal(LiteralToken::RightParen),
+        ]);
 
         assert!(p.parse_expression(0).is_err());
     }

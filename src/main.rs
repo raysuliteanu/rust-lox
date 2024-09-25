@@ -32,13 +32,9 @@ fn main() -> InterpreterResult<()> {
     let lox = Lox::parse();
 
     match &lox.commands {
-        LoxCommands::Tokenize { filename } => tokenize(filename, true).map(|_| {
-            eprintln!("tokenize: ok");
-            Ok(())
-        }),
+        LoxCommands::Tokenize { filename } => tokenize(filename, true).map(|_| Ok(())),
         LoxCommands::Parse { filename } => tokenize(filename, false).and_then(|tokens| {
             parse(tokens).map(|ast| {
-                eprintln!("parse: ok");
                 println!("{ast}");
                 Ok(())
             })
@@ -46,7 +42,6 @@ fn main() -> InterpreterResult<()> {
         LoxCommands::Evaluate { filename } => tokenize(filename, false).and_then(|tokens| {
             parse(tokens).and_then(|ast| {
                 evaluate(ast).map(|expr| {
-                    eprintln!("evaluate: ok");
                     println!("{expr}");
                     Ok(())
                 })

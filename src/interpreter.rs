@@ -1,5 +1,6 @@
-use std::fmt::{Display, Formatter};
 use crate::{error::InterpreterResult, parser::Ast};
+use std::fmt::{Display, Formatter};
+use crate::parser::{AstToken, ExprType};
 
 pub struct Interpreter {
     ast: Ast,
@@ -16,31 +17,31 @@ impl Interpreter {
 }
 
 fn interpret_node(ast: &Ast, rest: &[Ast]) -> InterpreterResult<ExprResult> {
-    eprintln!("interpreting {}", ast);
+    eprintln!("interpret_node({}, {:?})", ast, rest);
     let exp = match ast {
         Ast::Atom(a) => match a {
-            crate::parser::AstToken::Number(n) => ExprResult::Number(*n),
-            crate::parser::AstToken::String(s) => ExprResult::String(s.clone()),
-            crate::parser::AstToken::Expr(e) => match e {
-                crate::parser::ExprType::False => ExprResult::Boolean(false),
-                crate::parser::ExprType::True => ExprResult::Boolean(true),
-                crate::parser::ExprType::Nil => ExprResult::Nil,
-                crate::parser::ExprType::Minus => {
+            AstToken::Number(n) => ExprResult::Number(*n),
+            AstToken::String(s) => ExprResult::String(s.clone()),
+            AstToken::Expr(e) => match e {
+                ExprType::False => ExprResult::Boolean(false),
+                ExprType::True => ExprResult::Boolean(true),
+                ExprType::Nil => ExprResult::Nil,
+                ExprType::Minus => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Number(left - right)
                 }
-                crate::parser::ExprType::Plus => {
+                ExprType::Plus => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let rhs = interpret_node(&rest[1], &[])?;
                     match lhs {
@@ -51,7 +52,6 @@ fn interpret_node(ast: &Ast, rest: &[Ast]) -> InterpreterResult<ExprResult> {
                             };
 
                             ExprResult::Number(left + right)
-
                         }
                         ExprResult::String(left) => {
                             let right = match rhs {
@@ -59,151 +59,165 @@ fn interpret_node(ast: &Ast, rest: &[Ast]) -> InterpreterResult<ExprResult> {
                                 _ => todo!("invalid operand for add {rhs}"),
                             };
 
-                            let mut concat = String::from(left);
+                            let mut concat = left;
                             concat.push_str(right.as_str());
-                         
+
                             ExprResult::String(concat)
                         }
                         _ => todo!("invalid operand for addition {lhs}"),
                     }
                 }
-                crate::parser::ExprType::Star => {
+                ExprType::Star => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
-                    
+
                     ExprResult::Number(left * right)
                 }
-                crate::parser::ExprType::Slash => {
+                ExprType::Slash => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Number(left / right)
                 }
-                crate::parser::ExprType::EqEq => {
+                ExprType::EqEq => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Boolean(left == right)
                 }
-                crate::parser::ExprType::Bang => {
+                ExprType::Bang => {
                     let rhs = interpret_node(&rest[0], &[])?;
                     let right = match rhs {
                         ExprResult::Boolean(b) => b,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Boolean(!right)
                 }
-                crate::parser::ExprType::BangEq => {
+                ExprType::BangEq => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Boolean(left != right)
                 }
-                crate::parser::ExprType::Less => {
+                ExprType::Less => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Boolean(left < right)
                 }
-                crate::parser::ExprType::LessEq => {
+                ExprType::LessEq => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Boolean(left <= right)
                 }
-                crate::parser::ExprType::Greater => {
+                ExprType::Greater => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Boolean(left > right)
                 }
-                crate::parser::ExprType::GreaterEq => {
+                ExprType::GreaterEq => {
                     let lhs = interpret_node(&rest[0], &[])?;
                     let left = match lhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     let rhs = interpret_node(&rest[1], &[])?;
                     let right = match rhs {
                         ExprResult::Number(n) => n,
-                        _ => todo!()
+                        _ => todo!(),
                     };
 
                     ExprResult::Boolean(left >= right)
                 }
-                crate::parser::ExprType::And => todo!(),
-                crate::parser::ExprType::Or => todo!(),
-                crate::parser::ExprType::Group(_, _) => todo!(),
-                _ => ExprResult::Err,
+                ExprType::And => todo!(),
+                ExprType::Or => todo!(),
+                _ => {
+                    eprintln!("expression {}", e);
+                    ExprResult::Err(ast.clone())
+                },
             },
-            _ => ExprResult::Err,
+            AstToken::GroupStart => interpret_node(&rest[0], &rest[1..])?,  
+            AstToken::GroupEnd => panic!("should never see a GroupEnd"),
+            _ => {
+                eprintln!("ast {}", ast);
+                ExprResult::Err(ast.clone()) 
+            },
         },
-        Ast::Cons(a, r) => interpret_node(a, r)?,
+        Ast::Cons(a, r) => {
+            eprintln!("cons({a}, {r:?})");
+            if **a != Ast::Atom(AstToken::GroupStart) {
+                interpret_node(&r[0], &r[1..])?
+            } else {
+                interpret_node(a, r)?
+            }
+        },
     };
 
     Ok(exp)
@@ -215,7 +229,7 @@ pub enum ExprResult {
     Boolean(bool),
     String(String),
     Nil,
-    Err,
+    Err(Ast),
 }
 
 impl Display for ExprResult {
@@ -225,7 +239,25 @@ impl Display for ExprResult {
             ExprResult::String(s) => write!(f, "{s}"),
             ExprResult::Boolean(b) => write!(f, "{b}"),
             ExprResult::Nil => write!(f, "nil"),
-            ExprResult::Err => write!(f, "err"),
+            ExprResult::Err(ast) => write!(f, "invalid token: {ast}"),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::{AstToken, ExprType};
+    use super::*;
+   
+    #[test]
+    fn group_true() -> InterpreterResult<()> {
+        let ast = Ast::Cons(Box::new(Ast::Atom(AstToken::GroupStart)), vec![Ast::Atom(AstToken::Expr(ExprType::True))]);
+        let interpreter = Interpreter::new(ast);
+        let res = interpreter.interpret()?;
+        
+        assert_eq!(res.to_string(), "true");
+        
+        Ok(())
+    }
+
 }
