@@ -82,7 +82,7 @@ impl PrattParser {
                     bt => panic!("bad token: {bt:?}"),
                 },
                 None => {
-                    trace!("peek_token() returned None");
+                    trace!("next token: None");
                     break;
                 }
             };
