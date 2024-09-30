@@ -1,6 +1,6 @@
+use crate::parser::{AstToken, ExprType};
 use crate::{error::InterpreterResult, parser::Ast};
 use std::fmt::{Display, Formatter};
-use crate::parser::{AstToken, ExprType};
 
 pub struct Interpreter {
     ast: Ast,
@@ -19,7 +19,7 @@ impl Interpreter {
 fn interpret_node(ast: &Ast, rest: &[Ast]) -> InterpreterResult<ExprResult> {
     eprintln!("interpret_node({}, {:?})", ast, rest);
     let exp = match ast {
-        Ast::Atom(a) => match a {
+        Ast::Atom(token) => match token {
             AstToken::Number(n) => ExprResult::Number(*n),
             AstToken::String(s) => ExprResult::String(s.clone()),
             AstToken::Expr(e) => match e {
@@ -196,28 +196,35 @@ fn interpret_node(ast: &Ast, rest: &[Ast]) -> InterpreterResult<ExprResult> {
 
                     ExprResult::Boolean(left >= right)
                 }
-                ExprType::And => todo!(),
-                ExprType::Or => todo!(),
+                ExprType::And => todo!("boolean and"),
+                ExprType::Or => todo!("boolean or"),
                 _ => {
-                    eprintln!("expression {}", e);
+                    eprintln!("unknown expression {}", e);
                     ExprResult::Err(ast.clone())
-                },
+                }
             },
-            AstToken::GroupStart => interpret_node(&rest[0], &rest[1..])?,  
+            AstToken::GroupStart => interpret_node(&rest[0], &rest[1..])?,
             AstToken::GroupEnd => panic!("should never see a GroupEnd"),
             _ => {
                 eprintln!("ast {}", ast);
-                ExprResult::Err(ast.clone()) 
-            },
+                ExprResult::Err(ast.clone())
+            }
         },
         Ast::Cons(a, r) => {
             eprintln!("cons({a}, {r:?})");
-            if **a != Ast::Atom(AstToken::GroupStart) {
-                interpret_node(&r[0], &r[1..])?
-            } else {
-                interpret_node(a, r)?
+            match **a {
+                Ast::Atom(AstToken::Expr(ExprType::Bang)) => {
+                    let res = interpret_node(&r[0], &r[1..])?;
+                    match res {
+                        ExprResult::Boolean(true) | ExprResult::Number(_) => ExprResult::Boolean(false),
+                        ExprResult::Boolean(false) | ExprResult::Nil => ExprResult::Boolean(true),
+                        _ => res,
+                    }
+                }
+                Ast::Atom(AstToken::GroupStart) => interpret_node(&r[0], &r[1..])?,
+                _ => interpret_node(a, r)?,
             }
-        },
+        }
     };
 
     Ok(exp)
@@ -246,18 +253,34 @@ impl Display for ExprResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{AstToken, ExprType};
     use super::*;
-   
+    use crate::parser::{AstToken, ExprType};
+
     #[test]
     fn group_true() -> InterpreterResult<()> {
-        let ast = Ast::Cons(Box::new(Ast::Atom(AstToken::GroupStart)), vec![Ast::Atom(AstToken::Expr(ExprType::True))]);
+        let ast = Ast::Cons(
+            Box::new(Ast::Atom(AstToken::GroupStart)),
+            vec![Ast::Atom(AstToken::Expr(ExprType::True))],
+        );
         let interpreter = Interpreter::new(ast);
         let res = interpreter.interpret()?;
-        
+
         assert_eq!(res.to_string(), "true");
-        
+
         Ok(())
     }
 
+    #[test]
+    fn bang_boolean() -> InterpreterResult<()> {
+        let ast = Ast::Cons(
+            Box::new(Ast::Atom(AstToken::Expr(ExprType::Bang))),
+            vec![Ast::Atom(AstToken::Expr(ExprType::True))],
+        );
+        let interpreter = Interpreter::new(ast);
+        let res = interpreter.interpret()?;
+
+        assert_eq!(res.to_string(), "false");
+
+        Ok(())
+    }
 }

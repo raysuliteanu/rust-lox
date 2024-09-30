@@ -99,21 +99,20 @@ impl Iterator for Scanner {
         }
 
         loop {
-            let c = self.source.chars().nth(self.next_char_idx)?;
+            let cur_char = self.source.chars().nth(self.next_char_idx)?;
             self.next_char_idx += 1;
 
-            if c.is_whitespace() {
+            if cur_char.is_whitespace() {
                 continue;
             }
 
-            let t = match c {
+            let t = match cur_char {
                 '(' => return Some(Ok(LexToken::Literal(LiteralToken::LeftParen))),
                 ')' => return Some(Ok(LexToken::Literal(LiteralToken::RightParen))),
                 '{' => return Some(Ok(LexToken::Literal(LiteralToken::LeftBrace))),
                 '}' => return Some(Ok(LexToken::Literal(LiteralToken::RightBrace))),
                 ',' => return Some(Ok(LexToken::Literal(LiteralToken::Comma))),
                 '.' => return Some(Ok(LexToken::Literal(LiteralToken::Dot))),
-                '-' => return Some(Ok(LexToken::Literal(LiteralToken::Minus))),
                 '+' => return Some(Ok(LexToken::Literal(LiteralToken::Plus))),
                 ';' => return Some(Ok(LexToken::Literal(LiteralToken::SemiColon))),
                 '*' => return Some(Ok(LexToken::Literal(LiteralToken::Star))),
@@ -123,12 +122,12 @@ impl Iterator for Scanner {
                 '<' => StartOfToken::OpOrEqual(LessEq, Less),
                 '=' => StartOfToken::OpOrEqual(EqEq, Eq),
                 '!' => StartOfToken::OpOrEqual(BangEq, Bang),
-                c if c.is_ascii_digit() => StartOfToken::Number,
+                c if c.is_ascii_digit() || c == '-' => StartOfToken::Number,
                 c if c.is_alphanumeric() || c == '_' => StartOfToken::KeywordOrIdentifier,
                 _ => {
                     let e = LexerError::InvalidToken {
                         line: self.current_line(),
-                        token: c,
+                        token: cur_char,
                     };
                     return Some(Err(e.into()));
                 }
@@ -137,45 +136,58 @@ impl Iterator for Scanner {
             // todo: some cleanup still could be done here w.r.t. almost duplicate code
             return match t {
                 StartOfToken::Number => {
-                    let start = self.next_char_idx - 1;
-
-                    let offset = match self.source[start..]
-                        .chars()
-                        .find_position(|c| !c.is_ascii_digit())
+                    // 'cur_char' is either a '-' or a digit ('0'-'9'); check for the start of a negative number
+                    if cur_char.is_ascii_digit() || (cur_char == '-'
+                        && self
+                            .source
+                            .chars()
+                            .nth(self.next_char_idx)?
+                            .is_ascii_digit())
                     {
-                        Some((first_dot_off, '.')) => {
-                            let mut count_digits_after_dot = 0;
-                            for c in self.source[start + first_dot_off + 1..].chars() {
-                                if c.is_ascii_digit() {
-                                    count_digits_after_dot += 1;
+                        let start = self.next_char_idx;
+
+                        let offset = match self.source[start..]
+                            .chars()
+                            .find_position(|c| !c.is_ascii_digit())
+                        {
+                            Some((first_dot_off, '.')) => {
+                                let mut count_digits_after_dot = 0;
+                                for c in self.source[start + first_dot_off + 1..].chars() {
+                                    if c.is_ascii_digit() {
+                                        count_digits_after_dot += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
+
+                                if count_digits_after_dot > 0 {
+                                    start + first_dot_off + count_digits_after_dot + 1
+                                // + 1 for the dot
                                 } else {
-                                    break;
+                                    // otherwise leave the dot to be tokenized next time through tokenize()
+                                    start + first_dot_off
                                 }
                             }
-
-                            if count_digits_after_dot > 0 {
-                                start + first_dot_off + count_digits_after_dot + 1
-                            // + 1 for the dot
-                            } else {
-                                // otherwise leave the dot to be tokenized next time through tokenize()
-                                start + first_dot_off
+                            Some((first_dot_off, _)) => start + first_dot_off,
+                            None => {
+                                // nothing but digits till the eof
+                                self.source.len()
                             }
-                        }
-                        Some((first_dot_off, _)) => start + first_dot_off,
-                        None => {
-                            // nothing but digits till the eof
-                            self.source.len()
-                        }
-                    };
+                        };
+                        
+                        let with_leading_char = start - 1;
 
-                    let value = self.source[start..offset].parse().unwrap();
+                        let value = self.source[with_leading_char..offset].parse().unwrap();
 
-                    self.next_char_idx = offset;
+                        self.next_char_idx = offset;
 
-                    Some(Ok(LexToken::Number {
-                        raw: String::from(&self.source[start..offset]),
-                        value,
-                    }))
+                        Some(Ok(LexToken::Number {
+                            raw: String::from(&self.source[with_leading_char..offset]),
+                            value,
+                        }))
+                    } else {
+                        Some(Ok(LexToken::Literal(LiteralToken::Minus)))
+                    }
                 }
                 StartOfToken::StringLiteral => {
                     let offset = self.next_char_idx;
@@ -377,8 +389,37 @@ mod test {
     }
 
     #[test]
+    fn addition_and_subtraction() {
+        let input = "1 + 2 - 3";
+        let mut scanner = Scanner::new_from_string(input);
+        let result = scanner.tokenize(false);
+
+        assert!(result.is_ok());
+
+        let actual = scanner.tokens;
+        let expected = vec![
+            LexToken::Number {
+                raw: "1".to_string(),
+                value: 1.0,
+            },
+            LexToken::Literal(LiteralToken::Plus),
+            LexToken::Number {
+                raw: "2".to_string(),
+                value: 2.0,
+            },
+            LexToken::Literal(LiteralToken::Minus),
+            LexToken::Number {
+                raw: "3".to_string(),
+                value: 3.0,
+            },
+        ];
+
+        check(actual, expected);
+    }
+
+    #[test]
     fn numbers() {
-        let input = "123 123.456 .456 123. 42.42";
+        let input = "123 123.456 .456 123. 42.42 -67";
         let mut scanner = Scanner::new_from_string(input);
         let result = scanner.tokenize(false);
 
@@ -407,6 +448,10 @@ mod test {
             LexToken::Number {
                 raw: "42.42".to_string(),
                 value: 42.42,
+            },
+            LexToken::Number {
+                raw: "-67".to_string(),
+                value: -67.0,
             },
         ];
 

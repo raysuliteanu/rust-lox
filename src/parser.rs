@@ -532,4 +532,34 @@ mod tests {
 
         assert!(p.parse_expression(0).is_err());
     }
+    
+    #[test]
+    fn complex_expression() {
+        //  (54 != 58) == ((-93 + 11) >= (47 * 11))
+        let p = &mut PrattParser::new(vec![
+            Literal(LiteralToken::LeftParen),
+            Number { value: 54.0, raw: "54".to_string() },
+            Literal(LiteralToken::BangEq),
+            Number { value: 58.0, raw: "58".to_string() },
+            Literal(LiteralToken::RightParen),
+            Literal(LiteralToken::EqEq),
+            Literal(LiteralToken::LeftParen),
+            Literal(LiteralToken::LeftParen),
+            Number { value: -93.0, raw: "-93".to_string() },
+            Literal(LiteralToken::Plus),
+            Number { value: 11.0, raw: "11".to_string() },
+            Literal(LiteralToken::RightParen),
+            Literal(LiteralToken::GreaterEq),
+            Literal(LiteralToken::LeftParen),
+            Number { value: 47.0, raw: "47".to_string() },
+            Literal(LiteralToken::Star),
+            Number { value: 11.0, raw: "11".to_string() },
+            Literal(LiteralToken::RightParen),
+            Literal(LiteralToken::RightParen),
+        ]);
+
+        // expected: (== (group (!= 54.0 58.0)) (group (>= (group (+ (- 93.0) 11.0)) (group (* 47.0 11.0)))))
+        // got     : (== (group (!= 54.0 58.0)) (group (>= (group (+ -93.0 11.0)) (group (* 47.0 11.0)))))
+        assert!(p.parse_expression(0).is_err());
+    }
 }
