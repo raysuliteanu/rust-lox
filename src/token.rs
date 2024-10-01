@@ -1,4 +1,3 @@
-use crate::codecrafters;
 use miette::{Diagnostic, SourceSpan};
 use std::fmt::Display;
 use thiserror::Error;
@@ -32,8 +31,8 @@ impl<'le> Lexer<'le> {
             match next {
                 Ok(t) => {
                     println!("{t}");
-                    tokens.push(t) 
-                },
+                    tokens.push(t)
+                }
                 Err(e) => {
                     println!("{e}");
                     // errors.push(e);
@@ -65,7 +64,7 @@ impl<'le> Lexer<'le> {
         next
     }
 
-    fn tokenize_keyword_or_identifier(&mut self) -> Option<LexToken> {
+    fn tokenize_keyword_or_identifier(&mut self) -> Option<miette::Result<LexToken>> {
         let start = self.offset - 1;
         // split_once will "remove" the space if found ... neither part contains the space
         let word =
@@ -98,33 +97,76 @@ impl<'le> Lexer<'le> {
 
         self.offset += word.len() - 1; // -1 because we added one at the start
 
-        Some(token)
+        Some(Ok(token))
     }
 
-    fn tokenize_number(&mut self) -> Option<LexToken> {
-        todo!()
+    fn tokenize_number(&mut self) -> Option<miette::Result<LexToken>> {
+        let start = self.offset - 1;
+
+        let non_digit_idx = self.source[start..]
+            .find(|c| !matches!(c, '.' | '0'..='9'))
+            .unwrap_or(self.source.len() - start);
+        
+        let mut num_literal = &self.source[start..start + non_digit_idx];
+        let mut split = num_literal.splitn(3, '.');
+        match (split.next(), split.next(), split.next()) {
+            (Some(first), Some(second), Some(_)) => {
+                num_literal = &num_literal[..first.len() + 1 + second.len()]; // +1 for the dot sep
+            },
+            (Some(first), Some(second), None) => if second.is_empty() {
+                num_literal = &num_literal[..first.len()];
+            },
+            _ => {
+            },
+        }
+        
+        let value = match num_literal.parse() {
+            Ok(value) => value,
+            Err(e) => return Some(Err(InvalidToken {
+                src: self.source.to_string(),
+                span: SourceSpan::new(start.into(), num_literal.len()),
+                token: num_literal.chars().nth(0).unwrap(),
+                error: None,
+            }.into())),
+        };
+
+        self.offset = start + num_literal.len();
+        
+        Some(Ok(LexToken::Number {
+            raw: String::from(num_literal),
+            value,
+        }))
     }
 
     fn tokenize_op_or_opequal(
         &mut self,
         this: LiteralToken,
         that: LiteralToken,
-    ) -> Option<LexToken> {
+    ) -> Option<miette::Result<LexToken>> {
         self.peek()
             .is_some_and(|c| c == '=')
             .then(|| {
-                self.next(); // eat the '='
-                LexToken::Literal(that)
+                assert_eq!(self.advance(), Some('=')); // eat the '='
+                Ok(LexToken::Literal(that))
             })
-            .or(Some(LexToken::Literal(this)))
+            .or(Some(Ok(LexToken::Literal(this))))
     }
 
-    fn tokenize_slash_or_comment(&mut self) -> Option<LexToken> {
-        todo!()
-    }
-
-    fn tokenize_string_literal(&mut self) -> Option<LexToken> {
-        todo!()
+    fn tokenize_string_literal(&mut self) -> Option<miette::Result<LexToken>> {
+        let offset = self.offset();
+        if let Some(length) = self.source[offset..].find('"') {
+            self.offset += length + 1;
+            Some(Ok(LexToken::String {
+                value: String::from(&self.source[offset..offset + length]),
+            }))
+        } else {
+            let e = UnterminatedString {
+                src: self.source.to_string(),
+                err: SourceSpan::from(self.offset),
+            };
+            self.offset = self.source.len();
+            Some(Err(e.into()))
+        }
     }
 }
 
@@ -137,36 +179,47 @@ impl<'le> Iterator for Lexer<'le> {
             let t = match cur_char {
                 Some(c) => match c {
                     c if c.is_whitespace() => continue,
-                    '(' => Some(LexToken::Literal(LiteralToken::LeftParen)),
-                    ')' => Some(LexToken::Literal(LiteralToken::RightParen)),
-                    '{' => Some(LexToken::Literal(LiteralToken::LeftBrace)),
-                    '}' => Some(LexToken::Literal(LiteralToken::RightBrace)),
-                    ',' => Some(LexToken::Literal(LiteralToken::Comma)),
-                    '.' => Some(LexToken::Literal(LiteralToken::Dot)),
-                    '+' => Some(LexToken::Literal(LiteralToken::Plus)),
-                    ';' => Some(LexToken::Literal(LiteralToken::SemiColon)),
-                    '*' => Some(LexToken::Literal(LiteralToken::Star)),
+                    '(' => Some(Ok(LexToken::Literal(LiteralToken::LeftParen))),
+                    ')' => Some(Ok(LexToken::Literal(LiteralToken::RightParen))),
+                    '{' => Some(Ok(LexToken::Literal(LiteralToken::LeftBrace))),
+                    '}' => Some(Ok(LexToken::Literal(LiteralToken::RightBrace))),
+                    ',' => Some(Ok(LexToken::Literal(LiteralToken::Comma))),
+                    '.' => Some(Ok(LexToken::Literal(LiteralToken::Dot))),
+                    '+' => Some(Ok(LexToken::Literal(LiteralToken::Plus))),
+                    '-' => Some(Ok(LexToken::Literal(LiteralToken::Minus))),
+                    ';' => Some(Ok(LexToken::Literal(LiteralToken::SemiColon))),
+                    '*' => Some(Ok(LexToken::Literal(LiteralToken::Star))),
                     '"' => self.tokenize_string_literal(),
-                    '/' => self.tokenize_slash_or_comment(),
-                    '>' => self.tokenize_op_or_opequal(LiteralToken::GreaterEq, LiteralToken::Greater),
-                    '<' => self.tokenize_op_or_opequal(LiteralToken::LessEq, LiteralToken::Less),
-                    '=' => self.tokenize_op_or_opequal(LiteralToken::EqEq, LiteralToken::Eq),
-                    '!' => self.tokenize_op_or_opequal(LiteralToken::BangEq, LiteralToken::Bang),
+                    '/' => {
+                        if self.peek() == Some('/') {
+                            while self.peek() != Some('\n') {
+                                self.advance();
+                            }
+                            continue;
+                        } else {
+                            Some(Ok(LexToken::Literal(LiteralToken::Slash)))
+                        }
+                    }
+                    '>' => self.tokenize_op_or_opequal(LiteralToken::Greater, LiteralToken::GreaterEq),
+                    '<' => self.tokenize_op_or_opequal(LiteralToken::Less, LiteralToken::LessEq),
+                    '=' => self.tokenize_op_or_opequal(LiteralToken::Eq, LiteralToken::EqEq),
+                    '!' => self.tokenize_op_or_opequal(LiteralToken::Bang, LiteralToken::BangEq),
                     c if c.is_ascii_digit() => self.tokenize_number(),
                     c if c.is_alphanumeric() || c == '_' => self.tokenize_keyword_or_identifier(),
                     _ => {
                         return Some(Err(InvalidToken {
                             src: self.source.to_string(),
-                            err: SourceSpan::from(self.offset()),
+                            span: SourceSpan::from(self.offset()),
                             token: c,
+                            error: None,
                         }
                             .into()));
                     }
                 },
                 None => None,
             };
-            
-            return t.map(Ok);
+
+            return t;
         }
     }
 }
@@ -177,11 +230,21 @@ pub struct InvalidToken {
     #[source_code]
     src: String,
     #[label("here")]
-    err: SourceSpan,
+    span: SourceSpan,
     token: char,
+    error: Option<miette::Error>,
 }
 
-#[derive(Diagnostic, Debug, Error)]
+#[derive(Error, Debug, Diagnostic)]
+#[error("Unterminated string")]
+pub struct UnterminatedString {
+    #[source_code]
+    src: String,
+    #[label("here")]
+    err: SourceSpan,
+}
+
+#[derive(Error, Debug, Diagnostic)]
 #[error("Unexpected EOF")]
 pub struct Eof;
 
@@ -201,7 +264,12 @@ impl Display for LexToken {
             LexToken::Keyword(t) => write!(f, "{t}"),
             LexToken::Literal(t) => write!(f, "{t}"),
             LexToken::Number { raw, value } => {
-                write!(f, "NUMBER {raw} {}", codecrafters::format_float(*value))
+                if *value == value.trunc() {
+                    // tests require that integers are printed as N.0
+                    write!(f, "NUMBER {raw} {value}.0")
+                } else {
+                    write!(f, "NUMBER {raw} {value}")
+                }
             }
             LexToken::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
             LexToken::String { value } => write!(f, "STRING \"{value}\" {value}"),
@@ -444,7 +512,7 @@ mod test {
 
     #[test]
     fn numbers() {
-        let input = "123 123.456 .456 123. 42.42 -67";
+        let input = "123 123.456 .456 123. 42.42";
         let mut scanner = token::Lexer::new_from_string(input);
         let result = scanner.tokenize();
 
@@ -473,10 +541,6 @@ mod test {
             LexToken::Number {
                 raw: "42.42".to_string(),
                 value: 42.42,
-            },
-            LexToken::Number {
-                raw: "-67".to_string(),
-                value: -67.0,
             },
         ];
 
