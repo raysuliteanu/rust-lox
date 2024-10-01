@@ -11,4 +11,5 @@ clap = { version = "4.5.16", features = ["derive"] }
 env_logger = "0.11.5"
 itertools = "0.13.0"
 log = "0.4.22"
-thiserror = "1.0.38"                             # error handling
+miette = { version = "7.2.0", features = ["fancy"] }
+thiserror = "1.0.64"                             # error handling
