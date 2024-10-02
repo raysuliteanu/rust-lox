@@ -58,10 +58,10 @@ impl<'le> Lexer<'le> {
     }
 
     fn advance(&mut self) -> Option<char> {
-        let next = self.source.chars().nth(self.offset);
+        let next = self.source.chars().nth(self.offset)?;
         self.offset += 1;
 
-        next
+        Some(next)
     }
 
     fn tokenize_keyword_or_identifier(&mut self) -> Option<miette::Result<LexToken>> {
@@ -192,7 +192,7 @@ impl<'le> Iterator for Lexer<'le> {
                     '"' => self.tokenize_string_literal(),
                     '/' => {
                         if self.peek() == Some('/') {
-                            while self.peek() != Some('\n') {
+                            while self.peek().is_some_and(|c| c != '\n') {
                                 self.advance();
                             }
                             continue;
