@@ -6,7 +6,6 @@ pub struct Lexer<'le> {
     source_file: String,
     source: &'le str,
     offset: usize,
-    errors: Vec<miette::Error>,
 }
 
 impl<'le> Lexer<'le> {
@@ -15,34 +14,12 @@ impl<'le> Lexer<'le> {
             source_file,
             source,
             offset: 0,
-            errors: Vec::new(),
         }
     }
 
     #[cfg(test)]
     pub fn new_from_string(source: &'le str) -> Self {
         Self::new("test".to_string(), source)
-    }
-
-    pub fn tokenize(&mut self) -> Result<Vec<LexToken>, miette::Error> {
-        let mut tokens = vec![];
-        // let mut errors: Vec<miette::Error> = vec![];
-        for next in self {
-            match next {
-                Ok(t) => {
-                    println!("{t}");
-                    tokens.push(t)
-                }
-                Err(e) => {
-                    println!("{e}");
-                    // errors.push(e);
-                }
-            }
-        }
-
-        // self.errors.append(&mut errors);
-
-        Ok(tokens)
     }
 
     fn offset(&self) -> usize {
@@ -106,32 +83,36 @@ impl<'le> Lexer<'le> {
         let non_digit_idx = self.source[start..]
             .find(|c| !matches!(c, '.' | '0'..='9'))
             .unwrap_or(self.source.len() - start);
-        
+
         let mut num_literal = &self.source[start..start + non_digit_idx];
         let mut split = num_literal.splitn(3, '.');
         match (split.next(), split.next(), split.next()) {
             (Some(first), Some(second), Some(_)) => {
                 num_literal = &num_literal[..first.len() + 1 + second.len()]; // +1 for the dot sep
-            },
-            (Some(first), Some(second), None) => if second.is_empty() {
-                num_literal = &num_literal[..first.len()];
-            },
-            _ => {
-            },
+            }
+            (Some(first), Some(second), None) => {
+                if second.is_empty() {
+                    num_literal = &num_literal[..first.len()];
+                }
+            }
+            _ => {}
         }
-        
+
         let value = match num_literal.parse() {
             Ok(value) => value,
-            Err(e) => return Some(Err(InvalidToken {
-                src: self.source.to_string(),
-                span: SourceSpan::new(start.into(), num_literal.len()),
-                token: num_literal.chars().nth(0).unwrap(),
-                error: None,
-            }.into())),
+            Err(_e) => {
+                return Some(Err(InvalidToken {
+                    src: self.source.to_string(),
+                    span: SourceSpan::new(start.into(), num_literal.len()),
+                    token: num_literal.chars().nth(0).unwrap(),
+                    line: self.current_line(),
+                }
+                    .into()))
+            }
         };
 
         self.offset = start + num_literal.len();
-        
+
         Some(Ok(LexToken::Number {
             raw: String::from(num_literal),
             value,
@@ -200,20 +181,22 @@ impl<'le> Iterator for Lexer<'le> {
                             Some(Ok(LexToken::Literal(LiteralToken::Slash)))
                         }
                     }
-                    '>' => self.tokenize_op_or_opequal(LiteralToken::Greater, LiteralToken::GreaterEq),
+                    '>' => {
+                        self.tokenize_op_or_opequal(LiteralToken::Greater, LiteralToken::GreaterEq)
+                    }
                     '<' => self.tokenize_op_or_opequal(LiteralToken::Less, LiteralToken::LessEq),
                     '=' => self.tokenize_op_or_opequal(LiteralToken::Eq, LiteralToken::EqEq),
                     '!' => self.tokenize_op_or_opequal(LiteralToken::Bang, LiteralToken::BangEq),
                     c if c.is_ascii_digit() => self.tokenize_number(),
                     c if c.is_alphanumeric() || c == '_' => self.tokenize_keyword_or_identifier(),
                     _ => {
-                        return Some(Err(InvalidToken {
+                        let error = InvalidToken {
                             src: self.source.to_string(),
                             span: SourceSpan::from(self.offset()),
                             token: c,
-                            error: None,
-                        }
-                            .into()));
+                            line: self.current_line(),
+                        };
+                        return Some(Err(error.into()));
                     }
                 },
                 None => None,
@@ -225,14 +208,14 @@ impl<'le> Iterator for Lexer<'le> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("Unexpected token: '{token}'")]
+#[error("[line {line}] Error: Unexpected character: {token}")]
 pub struct InvalidToken {
     #[source_code]
     src: String,
     #[label("here")]
     span: SourceSpan,
     token: char,
-    error: Option<miette::Error>,
+    line: usize,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -373,17 +356,17 @@ impl Display for LiteralToken {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::token;
     use itertools::assert_equal;
 
     #[test]
     fn punctuation() {
-        let mut scanner = token::Lexer::new_from_string("/(){};,+-*===<=>=!=<>.!");
-        let result = scanner.tokenize();
+        let scanner = Lexer::new_from_string("/(){};,+-*===<=>=!=<>.!");
 
-        assert!(result.is_ok());
+        let actual = scanner
+            .into_iter()
+            .map(|x| x.unwrap_or_else(|e| panic!("{:?}", e)))
+            .collect::<Vec<_>>();
 
-        let actual = result.unwrap();
         let expected = vec![
             LexToken::Literal(LiteralToken::Slash),
             LexToken::Literal(LiteralToken::LeftParen),
@@ -413,12 +396,13 @@ mod test {
     fn keywords() {
         let keywords =
             "and class else false for fun if nil or print return super this true var while";
-        let mut scanner = token::Lexer::new_from_string(keywords);
-        let result = scanner.tokenize();
+        let scanner = Lexer::new_from_string(keywords);
 
-        assert!(result.is_ok());
+        let actual = scanner
+            .into_iter()
+            .map(|x| x.unwrap_or_else(|e| panic!("{:?}", e)))
+            .collect::<Vec<_>>();
 
-        let actual = result.unwrap();
         let expected = vec![
             LexToken::Keyword(KeywordToken::And),
             LexToken::Keyword(KeywordToken::Class),
@@ -444,12 +428,13 @@ mod test {
     #[test]
     fn string_literals() {
         let input = "\"some string value\"";
-        let mut scanner = token::Lexer::new_from_string(input);
-        let result = scanner.tokenize();
+        let scanner = Lexer::new_from_string(input);
 
-        assert!(result.is_ok());
+        let actual = scanner
+            .into_iter()
+            .map(|x| x.unwrap_or_else(|e| panic!("{:?}", e)))
+            .collect::<Vec<_>>();
 
-        let actual = result.unwrap();
         let expected = vec![LexToken::String {
             value: "some string value".to_string(),
         }];
@@ -460,12 +445,13 @@ mod test {
     #[test]
     fn string_literals_with_other_stuff() {
         let input = "var x = \"some string value\";";
-        let mut scanner = token::Lexer::new_from_string(input);
-        let result = scanner.tokenize();
+        let scanner = Lexer::new_from_string(input);
 
-        assert!(result.is_ok());
+        let actual = scanner
+            .into_iter()
+            .map(|x| x.unwrap_or_else(|e| panic!("{:?}", e)))
+            .collect::<Vec<_>>();
 
-        let actual = result.unwrap();
         let expected = vec![
             LexToken::Keyword(KeywordToken::Var),
             LexToken::Identifier {
@@ -484,12 +470,13 @@ mod test {
     #[test]
     fn addition_and_subtraction() {
         let input = "1 + 2 - 3";
-        let mut scanner = token::Lexer::new_from_string(input);
-        let result = scanner.tokenize();
+        let scanner = Lexer::new_from_string(input);
 
-        assert!(result.is_ok());
+        let actual = scanner
+            .into_iter()
+            .map(|x| x.unwrap_or_else(|e| panic!("{:?}", e)))
+            .collect::<Vec<_>>();
 
-        let actual = result.unwrap();
         let expected = vec![
             LexToken::Number {
                 raw: "1".to_string(),
@@ -513,12 +500,13 @@ mod test {
     #[test]
     fn numbers() {
         let input = "123 123.456 .456 123. 42.42";
-        let mut scanner = token::Lexer::new_from_string(input);
-        let result = scanner.tokenize();
+        let scanner = Lexer::new_from_string(input);
 
-        assert!(result.is_ok());
+        let actual = scanner
+            .into_iter()
+            .map(|x| x.unwrap_or_else(|e| panic!("{:?}", e)))
+            .collect::<Vec<_>>();
 
-        let actual = result.unwrap();
         let expected = vec![
             LexToken::Number {
                 raw: "123".to_string(),
@@ -550,12 +538,13 @@ mod test {
     #[test]
     fn identifiers() {
         let input = "(foo, bar, baz)";
-        let mut scanner = token::Lexer::new_from_string(input);
-        let result = scanner.tokenize();
+        let scanner = Lexer::new_from_string(input);
 
-        assert!(result.is_ok());
+        let actual = scanner
+            .into_iter()
+            .map(|x| x.unwrap_or_else(|e| panic!("{:?}", e)))
+            .collect::<Vec<_>>();
 
-        let actual = result.unwrap();
         let expected = vec![
             LexToken::Literal(LiteralToken::LeftParen),
             LexToken::Identifier {
