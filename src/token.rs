@@ -215,8 +215,7 @@ pub struct InvalidToken {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("[line {}] Error: Unterminated string: {}", .src[..=.span.offset() - 1].lines().count(), .src.chars().nth(.span.offset() - 1).unwrap()
-)]
+#[error("[line {}] Error: Unterminated string", .src[..=.span.offset() - 1].lines().count())]
 pub struct UnterminatedString {
     #[source_code]
     src: String,
