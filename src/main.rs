@@ -64,6 +64,8 @@ pub fn tokenize(lexer: Lexer) -> Result<u8, miette::Error> {
         }
     }
 
+    println!("EOF");
+    
     Ok(exit_code)
 }
 

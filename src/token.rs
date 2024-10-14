@@ -104,10 +104,8 @@ impl<'le> Lexer<'le> {
                 return Some(Err(InvalidToken {
                     src: self.source.to_string(),
                     span: SourceSpan::new(start.into(), num_literal.len()),
-                    token: num_literal.chars().nth(0).unwrap(),
-                    line: self.current_line(),
                 }
-                    .into()))
+                    .into()));
             }
         };
 
@@ -143,7 +141,7 @@ impl<'le> Lexer<'le> {
         } else {
             let e = UnterminatedString {
                 src: self.source.to_string(),
-                err: SourceSpan::from(self.offset),
+                span: SourceSpan::from(self.offset),
             };
             self.offset = self.source.len();
             Some(Err(e.into()))
@@ -193,9 +191,8 @@ impl<'le> Iterator for Lexer<'le> {
                         let error = InvalidToken {
                             src: self.source.to_string(),
                             span: SourceSpan::from(self.offset()),
-                            token: c,
-                            line: self.current_line(),
                         };
+
                         return Some(Err(error.into()));
                     }
                 },
@@ -208,23 +205,23 @@ impl<'le> Iterator for Lexer<'le> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("[line {line}] Error: Unexpected character: {token}")]
+#[error("[line {}] Error: Unexpected character: {}", .src[..=.span.offset() - 1].lines().count(), .src.chars().nth(.span.offset() - 1).unwrap()
+)]
 pub struct InvalidToken {
     #[source_code]
     src: String,
     #[label("here")]
     span: SourceSpan,
-    token: char,
-    line: usize,
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("Unterminated string")]
+#[error("[line {}] Error: Unterminated string: {}", .src[..=.span.offset() - 1].lines().count(), .src.chars().nth(.span.offset() - 1).unwrap()
+)]
 pub struct UnterminatedString {
     #[source_code]
     src: String,
     #[label("here")]
-    err: SourceSpan,
+    span: SourceSpan,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -238,7 +235,6 @@ pub enum LexToken {
     Number { raw: String, value: f64 },
     Identifier { value: String },
     String { value: String },
-    Eof,
 }
 
 impl Display for LexToken {
@@ -256,7 +252,6 @@ impl Display for LexToken {
             }
             LexToken::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
             LexToken::String { value } => write!(f, "STRING \"{value}\" {value}"),
-            LexToken::Eof => write!(f, "EOF"),
         }
     }
 }
