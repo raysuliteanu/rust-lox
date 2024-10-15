@@ -3,9 +3,11 @@ use std::iter::Peekable;
 
 use log::trace;
 use miette::Diagnostic;
+use strum::EnumMessage;
 use thiserror::Error;
 
 use crate::token;
+use crate::token::KeywordKind;
 use crate::token::Lexer;
 use crate::token::LiteralKind;
 use crate::token::Token;
@@ -156,19 +158,28 @@ impl<'pa> Parser<'pa> {
         trace!("primary()");
 
         if self.matches(&[Token::Keyword(token::KeywordKind::True)]) {
+            self.lexer.next();
             return Ok(Node::Terminal(Token::Keyword(token::KeywordKind::True)));
         }
+
         if self.matches(&[Token::Keyword(token::KeywordKind::False)]) {
+            self.lexer.next();
             return Ok(Node::Terminal(Token::Keyword(token::KeywordKind::False)));
         }
+
         if self.matches(&[Token::Keyword(token::KeywordKind::Nil)]) {
+            self.lexer.next();
             return Ok(Node::Terminal(Token::Keyword(token::KeywordKind::Nil)));
         }
+
         if self.matches(&[Token::Literal(token::LiteralKind::LeftParen)]) {
+            trace!("matched '('; consuming it");
             // eat left paren
             self.lexer.next();
 
             let expr = self.expression()?;
+
+            trace!("expecting ')' and consuming it");
 
             // eat right paren
             assert!(self
@@ -219,7 +230,17 @@ enum Node {
 impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Node::Terminal(t) => write!(f, "{t}"),
+            //
+            Node::Terminal(t) => match t {
+                Token::Keyword(k) => write!(
+                    f,
+                    "{}",
+                    <&KeywordKind as Into<&'static str>>::into(k).to_lowercase()
+                ),
+                Token::Literal(l) => write!(f, "{}", l.get_message().unwrap()),
+                Token::Number { value, .. } => write!(f, "{value}"),
+                Token::Identifier { value } | Token::String { value } => write!(f, "{value}"),
+            },
             Node::Expr(e) => write!(f, "{e}"),
         }
     }

@@ -1,6 +1,6 @@
 use miette::{Diagnostic, SourceSpan};
 use std::{fmt::Display, str::Chars};
-use strum::IntoStaticStr;
+use strum::{EnumMessage, IntoStaticStr};
 use thiserror::Error;
 
 pub struct Lexer<'le> {
@@ -283,52 +283,51 @@ impl Display for KeywordKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, EnumMessage)]
 pub enum LiteralKind {
+    #[strum(message = "(", detailed_message = "LEFT_PAREN ( null")]
     LeftParen,
+    #[strum(message = ")", detailed_message = "RIGHT_PAREN ) null")]
     RightParen,
+    #[strum(message = "{", detailed_message = "LEFT_BRACE { null")]
     LeftBrace,
+    #[strum(message = "}", detailed_message = "RIGHT_BRACE } null")]
     RightBrace,
+    #[strum(message = ",", detailed_message = "COMMA , null")]
     Comma,
+    #[strum(message = ".", detailed_message = "DOT . null")]
     Dot,
+    #[strum(message = "-", detailed_message = "MINUS - null")]
     Minus,
+    #[strum(message = "+", detailed_message = "PLUS + null")]
     Plus,
+    #[strum(message = ";", detailed_message = "SEMICOLON ; null")]
     SemiColon,
+    #[strum(message = "*", detailed_message = "STAR * null")]
     Star,
+    #[strum(message = "=", detailed_message = "EQUAL = null")]
     Eq,
+    #[strum(message = "==", detailed_message = "EQUAL_EQUAL == null")]
     EqEq,
+    #[strum(message = "!", detailed_message = "BANG ! null")]
     Bang,
+    #[strum(message = "!=", detailed_message = "BANG_EQUAL != null")]
     BangEq,
+    #[strum(message = "<", detailed_message = "LESS < null")]
     Less,
+    #[strum(message = "<=", detailed_message = "LESS_EQUAL <= null")]
     LessEq,
+    #[strum(message = ">", detailed_message = "GREATER > null")]
     Greater,
+    #[strum(message = ">=", detailed_message = "GREATER_EQUAL >= null")]
     GreaterEq,
+    #[strum(message = "/", detailed_message = "SLASH / null")]
     Slash,
 }
 
 impl Display for LiteralKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LiteralKind::LeftParen => write!(f, "LEFT_PAREN ( null"),
-            LiteralKind::RightParen => write!(f, "RIGHT_PAREN ) null"),
-            LiteralKind::LeftBrace => write!(f, "LEFT_BRACE {{ null"),
-            LiteralKind::RightBrace => write!(f, "RIGHT_BRACE }} null"),
-            LiteralKind::Comma => write!(f, "COMMA , null"),
-            LiteralKind::Dot => write!(f, "DOT . null"),
-            LiteralKind::Minus => write!(f, "MINUS - null"),
-            LiteralKind::Plus => write!(f, "PLUS + null"),
-            LiteralKind::SemiColon => write!(f, "SEMICOLON ; null"),
-            LiteralKind::Star => write!(f, "STAR * null"),
-            LiteralKind::Eq => write!(f, "EQUAL = null"),
-            LiteralKind::EqEq => write!(f, "EQUAL_EQUAL == null"),
-            LiteralKind::Bang => write!(f, "BANG ! null"),
-            LiteralKind::BangEq => write!(f, "BANG_EQUAL != null"),
-            LiteralKind::Less => write!(f, "LESS < null"),
-            LiteralKind::LessEq => write!(f, "LESS_EQUAL <= null"),
-            LiteralKind::Greater => write!(f, "GREATER > null"),
-            LiteralKind::GreaterEq => write!(f, "GREATER_EQUAL >= null"),
-            LiteralKind::Slash => write!(f, "SLASH / null"),
-        }
+        write!(f, "{}", self.get_detailed_message().unwrap())
     }
 }
 
