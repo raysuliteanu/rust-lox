@@ -1,19 +1,21 @@
 use miette::{Diagnostic, SourceSpan};
-use std::fmt::Display;
+use std::{fmt::Display, str::Chars};
 use thiserror::Error;
 
 pub struct Lexer<'le> {
-    source_file: String,
+    _source_file: String,
     source: &'le str,
     offset: usize,
+    _chars: Chars<'le>,
 }
 
 impl<'le> Lexer<'le> {
     pub fn new(source_file: String, source: &'le str) -> Self {
         Self {
-            source_file,
+            _source_file: source_file,
             source,
             offset: 0,
+            _chars: source.chars(),
         }
     }
 
@@ -26,22 +28,20 @@ impl<'le> Lexer<'le> {
         self.offset
     }
 
-    fn current_line(&self) -> usize {
-        self.source[..self.offset].lines().count()
-    }
-
-    fn peek(&self) -> Option<char> {
+    fn peek(&mut self) -> Option<char> {
+        // self.chars.nth(self.offset)
         self.source.chars().nth(self.offset)
     }
 
     fn advance(&mut self) -> Option<char> {
+        // let next = self.chars.nth(self.offset)?;
         let next = self.source.chars().nth(self.offset)?;
         self.offset += 1;
 
         Some(next)
     }
 
-    fn tokenize_keyword_or_identifier(&mut self) -> Option<miette::Result<LexToken>> {
+    fn tokenize_keyword_or_identifier(&mut self) -> Option<miette::Result<Token>> {
         let start = self.offset - 1;
         // split_once will "remove" the space if found ... neither part contains the space
         let word =
@@ -51,23 +51,23 @@ impl<'le> Lexer<'le> {
             };
 
         let token = match word {
-            "and" => LexToken::Keyword(KeywordToken::And),
-            "class" => LexToken::Keyword(KeywordToken::Class),
-            "else" => LexToken::Keyword(KeywordToken::Else),
-            "false" => LexToken::Keyword(KeywordToken::False),
-            "for" => LexToken::Keyword(KeywordToken::For),
-            "fun" => LexToken::Keyword(KeywordToken::Fun),
-            "if" => LexToken::Keyword(KeywordToken::If),
-            "nil" => LexToken::Keyword(KeywordToken::Nil),
-            "or" => LexToken::Keyword(KeywordToken::Or),
-            "print" => LexToken::Keyword(KeywordToken::Print),
-            "return" => LexToken::Keyword(KeywordToken::Return),
-            "super" => LexToken::Keyword(KeywordToken::Super),
-            "this" => LexToken::Keyword(KeywordToken::This),
-            "true" => LexToken::Keyword(KeywordToken::True),
-            "var" => LexToken::Keyword(KeywordToken::Var),
-            "while" => LexToken::Keyword(KeywordToken::While),
-            _ => LexToken::Identifier {
+            "and" => Token::Keyword(KeywordKind::And),
+            "class" => Token::Keyword(KeywordKind::Class),
+            "else" => Token::Keyword(KeywordKind::Else),
+            "false" => Token::Keyword(KeywordKind::False),
+            "for" => Token::Keyword(KeywordKind::For),
+            "fun" => Token::Keyword(KeywordKind::Fun),
+            "if" => Token::Keyword(KeywordKind::If),
+            "nil" => Token::Keyword(KeywordKind::Nil),
+            "or" => Token::Keyword(KeywordKind::Or),
+            "print" => Token::Keyword(KeywordKind::Print),
+            "return" => Token::Keyword(KeywordKind::Return),
+            "super" => Token::Keyword(KeywordKind::Super),
+            "this" => Token::Keyword(KeywordKind::This),
+            "true" => Token::Keyword(KeywordKind::True),
+            "var" => Token::Keyword(KeywordKind::Var),
+            "while" => Token::Keyword(KeywordKind::While),
+            _ => Token::Identifier {
                 value: String::from(&self.source[start..start + word.len()]),
             },
         };
@@ -77,7 +77,7 @@ impl<'le> Lexer<'le> {
         Some(Ok(token))
     }
 
-    fn tokenize_number(&mut self) -> Option<miette::Result<LexToken>> {
+    fn tokenize_number(&mut self) -> Option<miette::Result<Token>> {
         let start = self.offset - 1;
 
         let non_digit_idx = self.source[start..]
@@ -105,13 +105,13 @@ impl<'le> Lexer<'le> {
                     src: self.source.to_string(),
                     span: SourceSpan::new(start.into(), num_literal.len()),
                 }
-                    .into()));
+                .into()));
             }
         };
 
         self.offset = start + num_literal.len();
 
-        Some(Ok(LexToken::Number {
+        Some(Ok(Token::Number {
             raw: String::from(num_literal),
             value,
         }))
@@ -119,23 +119,23 @@ impl<'le> Lexer<'le> {
 
     fn tokenize_op_or_opequal(
         &mut self,
-        this: LiteralToken,
-        that: LiteralToken,
-    ) -> Option<miette::Result<LexToken>> {
+        this: LiteralKind,
+        that: LiteralKind,
+    ) -> Option<miette::Result<Token>> {
         self.peek()
             .is_some_and(|c| c == '=')
             .then(|| {
                 assert_eq!(self.advance(), Some('=')); // eat the '='
-                Ok(LexToken::Literal(that))
+                Ok(Token::Literal(that))
             })
-            .or(Some(Ok(LexToken::Literal(this))))
+            .or(Some(Ok(Token::Literal(this))))
     }
 
-    fn tokenize_string_literal(&mut self) -> Option<miette::Result<LexToken>> {
+    fn tokenize_string_literal(&mut self) -> Option<miette::Result<Token>> {
         let offset = self.offset();
         if let Some(length) = self.source[offset..].find('"') {
             self.offset += length + 1;
-            Some(Ok(LexToken::String {
+            Some(Ok(Token::String {
                 value: String::from(&self.source[offset..offset + length]),
             }))
         } else {
@@ -150,7 +150,7 @@ impl<'le> Lexer<'le> {
 }
 
 impl<'le> Iterator for Lexer<'le> {
-    type Item = Result<LexToken, miette::Error>;
+    type Item = Result<Token, miette::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -158,16 +158,16 @@ impl<'le> Iterator for Lexer<'le> {
             let t = match cur_char {
                 Some(c) => match c {
                     c if c.is_whitespace() => continue,
-                    '(' => Some(Ok(LexToken::Literal(LiteralToken::LeftParen))),
-                    ')' => Some(Ok(LexToken::Literal(LiteralToken::RightParen))),
-                    '{' => Some(Ok(LexToken::Literal(LiteralToken::LeftBrace))),
-                    '}' => Some(Ok(LexToken::Literal(LiteralToken::RightBrace))),
-                    ',' => Some(Ok(LexToken::Literal(LiteralToken::Comma))),
-                    '.' => Some(Ok(LexToken::Literal(LiteralToken::Dot))),
-                    '+' => Some(Ok(LexToken::Literal(LiteralToken::Plus))),
-                    '-' => Some(Ok(LexToken::Literal(LiteralToken::Minus))),
-                    ';' => Some(Ok(LexToken::Literal(LiteralToken::SemiColon))),
-                    '*' => Some(Ok(LexToken::Literal(LiteralToken::Star))),
+                    '(' => Some(Ok(Token::Literal(LiteralKind::LeftParen))),
+                    ')' => Some(Ok(Token::Literal(LiteralKind::RightParen))),
+                    '{' => Some(Ok(Token::Literal(LiteralKind::LeftBrace))),
+                    '}' => Some(Ok(Token::Literal(LiteralKind::RightBrace))),
+                    ',' => Some(Ok(Token::Literal(LiteralKind::Comma))),
+                    '.' => Some(Ok(Token::Literal(LiteralKind::Dot))),
+                    '+' => Some(Ok(Token::Literal(LiteralKind::Plus))),
+                    '-' => Some(Ok(Token::Literal(LiteralKind::Minus))),
+                    ';' => Some(Ok(Token::Literal(LiteralKind::SemiColon))),
+                    '*' => Some(Ok(Token::Literal(LiteralKind::Star))),
                     '"' => self.tokenize_string_literal(),
                     '/' => {
                         if self.peek() == Some('/') {
@@ -176,15 +176,15 @@ impl<'le> Iterator for Lexer<'le> {
                             }
                             continue;
                         } else {
-                            Some(Ok(LexToken::Literal(LiteralToken::Slash)))
+                            Some(Ok(Token::Literal(LiteralKind::Slash)))
                         }
                     }
                     '>' => {
-                        self.tokenize_op_or_opequal(LiteralToken::Greater, LiteralToken::GreaterEq)
+                        self.tokenize_op_or_opequal(LiteralKind::Greater, LiteralKind::GreaterEq)
                     }
-                    '<' => self.tokenize_op_or_opequal(LiteralToken::Less, LiteralToken::LessEq),
-                    '=' => self.tokenize_op_or_opequal(LiteralToken::Eq, LiteralToken::EqEq),
-                    '!' => self.tokenize_op_or_opequal(LiteralToken::Bang, LiteralToken::BangEq),
+                    '<' => self.tokenize_op_or_opequal(LiteralKind::Less, LiteralKind::LessEq),
+                    '=' => self.tokenize_op_or_opequal(LiteralKind::Eq, LiteralKind::EqEq),
+                    '!' => self.tokenize_op_or_opequal(LiteralKind::Bang, LiteralKind::BangEq),
                     c if c.is_ascii_digit() => self.tokenize_number(),
                     c if c.is_alphanumeric() || c == '_' => self.tokenize_keyword_or_identifier(),
                     _ => {
@@ -223,25 +223,21 @@ pub struct UnterminatedString {
     span: SourceSpan,
 }
 
-#[derive(Error, Debug, Diagnostic)]
-#[error("Unexpected EOF")]
-pub struct Eof;
-
 #[derive(Debug, Clone, PartialEq)]
-pub enum LexToken {
-    Keyword(KeywordToken),
-    Literal(LiteralToken),
+pub enum Token {
+    Keyword(KeywordKind),
+    Literal(LiteralKind),
     Number { raw: String, value: f64 },
     Identifier { value: String },
     String { value: String },
 }
 
-impl Display for LexToken {
+impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LexToken::Keyword(t) => write!(f, "{t}"),
-            LexToken::Literal(t) => write!(f, "{t}"),
-            LexToken::Number { raw, value } => {
+            Token::Keyword(t) => write!(f, "{t}"),
+            Token::Literal(t) => write!(f, "{t}"),
+            Token::Number { raw, value } => {
                 if *value == value.trunc() {
                     // tests require that integers are printed as N.0
                     write!(f, "NUMBER {raw} {value}.0")
@@ -249,14 +245,14 @@ impl Display for LexToken {
                     write!(f, "NUMBER {raw} {value}")
                 }
             }
-            LexToken::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
-            LexToken::String { value } => write!(f, "STRING \"{value}\" {value}"),
+            Token::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
+            Token::String { value } => write!(f, "STRING \"{value}\" {value}"),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum KeywordToken {
+pub enum KeywordKind {
     And,
     Class,
     Else,
@@ -275,31 +271,31 @@ pub enum KeywordToken {
     Print,
 }
 
-impl Display for KeywordToken {
+impl Display for KeywordKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            KeywordToken::And => write!(f, "AND and null"),
-            KeywordToken::Class => write!(f, "CLASS class null"),
-            KeywordToken::Else => write!(f, "ELSE else null"),
-            KeywordToken::False => write!(f, "FALSE false null"),
-            KeywordToken::For => write!(f, "FOR for null"),
-            KeywordToken::Fun => write!(f, "FUN fun null"),
-            KeywordToken::If => write!(f, "IF if null"),
-            KeywordToken::Nil => write!(f, "NIL nil null"),
-            KeywordToken::Or => write!(f, "OR or null"),
-            KeywordToken::Print => write!(f, "PRINT print null"),
-            KeywordToken::Return => write!(f, "RETURN return null"),
-            KeywordToken::Super => write!(f, "SUPER super null"),
-            KeywordToken::This => write!(f, "THIS this null"),
-            KeywordToken::True => write!(f, "TRUE true null"),
-            KeywordToken::Var => write!(f, "VAR var null"),
-            KeywordToken::While => write!(f, "WHILE while null"),
+            KeywordKind::And => write!(f, "AND and null"),
+            KeywordKind::Class => write!(f, "CLASS class null"),
+            KeywordKind::Else => write!(f, "ELSE else null"),
+            KeywordKind::False => write!(f, "FALSE false null"),
+            KeywordKind::For => write!(f, "FOR for null"),
+            KeywordKind::Fun => write!(f, "FUN fun null"),
+            KeywordKind::If => write!(f, "IF if null"),
+            KeywordKind::Nil => write!(f, "NIL nil null"),
+            KeywordKind::Or => write!(f, "OR or null"),
+            KeywordKind::Print => write!(f, "PRINT print null"),
+            KeywordKind::Return => write!(f, "RETURN return null"),
+            KeywordKind::Super => write!(f, "SUPER super null"),
+            KeywordKind::This => write!(f, "THIS this null"),
+            KeywordKind::True => write!(f, "TRUE true null"),
+            KeywordKind::Var => write!(f, "VAR var null"),
+            KeywordKind::While => write!(f, "WHILE while null"),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum LiteralToken {
+pub enum LiteralKind {
     LeftParen,
     RightParen,
     LeftBrace,
@@ -321,28 +317,28 @@ pub enum LiteralToken {
     Slash,
 }
 
-impl Display for LiteralToken {
+impl Display for LiteralKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LiteralToken::LeftParen => write!(f, "LEFT_PAREN ( null"),
-            LiteralToken::RightParen => write!(f, "RIGHT_PAREN ) null"),
-            LiteralToken::LeftBrace => write!(f, "LEFT_BRACE {{ null"),
-            LiteralToken::RightBrace => write!(f, "RIGHT_BRACE }} null"),
-            LiteralToken::Comma => write!(f, "COMMA , null"),
-            LiteralToken::Dot => write!(f, "DOT . null"),
-            LiteralToken::Minus => write!(f, "MINUS - null"),
-            LiteralToken::Plus => write!(f, "PLUS + null"),
-            LiteralToken::SemiColon => write!(f, "SEMICOLON ; null"),
-            LiteralToken::Star => write!(f, "STAR * null"),
-            LiteralToken::Eq => write!(f, "EQUAL = null"),
-            LiteralToken::EqEq => write!(f, "EQUAL_EQUAL == null"),
-            LiteralToken::Bang => write!(f, "BANG ! null"),
-            LiteralToken::BangEq => write!(f, "BANG_EQUAL != null"),
-            LiteralToken::Less => write!(f, "LESS < null"),
-            LiteralToken::LessEq => write!(f, "LESS_EQUAL <= null"),
-            LiteralToken::Greater => write!(f, "GREATER > null"),
-            LiteralToken::GreaterEq => write!(f, "GREATER_EQUAL >= null"),
-            LiteralToken::Slash => write!(f, "SLASH / null"),
+            LiteralKind::LeftParen => write!(f, "LEFT_PAREN ( null"),
+            LiteralKind::RightParen => write!(f, "RIGHT_PAREN ) null"),
+            LiteralKind::LeftBrace => write!(f, "LEFT_BRACE {{ null"),
+            LiteralKind::RightBrace => write!(f, "RIGHT_BRACE }} null"),
+            LiteralKind::Comma => write!(f, "COMMA , null"),
+            LiteralKind::Dot => write!(f, "DOT . null"),
+            LiteralKind::Minus => write!(f, "MINUS - null"),
+            LiteralKind::Plus => write!(f, "PLUS + null"),
+            LiteralKind::SemiColon => write!(f, "SEMICOLON ; null"),
+            LiteralKind::Star => write!(f, "STAR * null"),
+            LiteralKind::Eq => write!(f, "EQUAL = null"),
+            LiteralKind::EqEq => write!(f, "EQUAL_EQUAL == null"),
+            LiteralKind::Bang => write!(f, "BANG ! null"),
+            LiteralKind::BangEq => write!(f, "BANG_EQUAL != null"),
+            LiteralKind::Less => write!(f, "LESS < null"),
+            LiteralKind::LessEq => write!(f, "LESS_EQUAL <= null"),
+            LiteralKind::Greater => write!(f, "GREATER > null"),
+            LiteralKind::GreaterEq => write!(f, "GREATER_EQUAL >= null"),
+            LiteralKind::Slash => write!(f, "SLASH / null"),
         }
     }
 }
@@ -362,25 +358,25 @@ mod test {
             .collect::<Vec<_>>();
 
         let expected = vec![
-            LexToken::Literal(LiteralToken::Slash),
-            LexToken::Literal(LiteralToken::LeftParen),
-            LexToken::Literal(LiteralToken::RightParen),
-            LexToken::Literal(LiteralToken::LeftBrace),
-            LexToken::Literal(LiteralToken::RightBrace),
-            LexToken::Literal(LiteralToken::SemiColon),
-            LexToken::Literal(LiteralToken::Comma),
-            LexToken::Literal(LiteralToken::Plus),
-            LexToken::Literal(LiteralToken::Minus),
-            LexToken::Literal(LiteralToken::Star),
-            LexToken::Literal(LiteralToken::EqEq),
-            LexToken::Literal(LiteralToken::Eq),
-            LexToken::Literal(LiteralToken::LessEq),
-            LexToken::Literal(LiteralToken::GreaterEq),
-            LexToken::Literal(LiteralToken::BangEq),
-            LexToken::Literal(LiteralToken::Less),
-            LexToken::Literal(LiteralToken::Greater),
-            LexToken::Literal(LiteralToken::Dot),
-            LexToken::Literal(LiteralToken::Bang),
+            Token::Literal(LiteralKind::Slash),
+            Token::Literal(LiteralKind::LeftParen),
+            Token::Literal(LiteralKind::RightParen),
+            Token::Literal(LiteralKind::LeftBrace),
+            Token::Literal(LiteralKind::RightBrace),
+            Token::Literal(LiteralKind::SemiColon),
+            Token::Literal(LiteralKind::Comma),
+            Token::Literal(LiteralKind::Plus),
+            Token::Literal(LiteralKind::Minus),
+            Token::Literal(LiteralKind::Star),
+            Token::Literal(LiteralKind::EqEq),
+            Token::Literal(LiteralKind::Eq),
+            Token::Literal(LiteralKind::LessEq),
+            Token::Literal(LiteralKind::GreaterEq),
+            Token::Literal(LiteralKind::BangEq),
+            Token::Literal(LiteralKind::Less),
+            Token::Literal(LiteralKind::Greater),
+            Token::Literal(LiteralKind::Dot),
+            Token::Literal(LiteralKind::Bang),
         ];
 
         check(actual, expected);
@@ -398,22 +394,22 @@ mod test {
             .collect::<Vec<_>>();
 
         let expected = vec![
-            LexToken::Keyword(KeywordToken::And),
-            LexToken::Keyword(KeywordToken::Class),
-            LexToken::Keyword(KeywordToken::Else),
-            LexToken::Keyword(KeywordToken::False),
-            LexToken::Keyword(KeywordToken::For),
-            LexToken::Keyword(KeywordToken::Fun),
-            LexToken::Keyword(KeywordToken::If),
-            LexToken::Keyword(KeywordToken::Nil),
-            LexToken::Keyword(KeywordToken::Or),
-            LexToken::Keyword(KeywordToken::Print),
-            LexToken::Keyword(KeywordToken::Return),
-            LexToken::Keyword(KeywordToken::Super),
-            LexToken::Keyword(KeywordToken::This),
-            LexToken::Keyword(KeywordToken::True),
-            LexToken::Keyword(KeywordToken::Var),
-            LexToken::Keyword(KeywordToken::While),
+            Token::Keyword(KeywordKind::And),
+            Token::Keyword(KeywordKind::Class),
+            Token::Keyword(KeywordKind::Else),
+            Token::Keyword(KeywordKind::False),
+            Token::Keyword(KeywordKind::For),
+            Token::Keyword(KeywordKind::Fun),
+            Token::Keyword(KeywordKind::If),
+            Token::Keyword(KeywordKind::Nil),
+            Token::Keyword(KeywordKind::Or),
+            Token::Keyword(KeywordKind::Print),
+            Token::Keyword(KeywordKind::Return),
+            Token::Keyword(KeywordKind::Super),
+            Token::Keyword(KeywordKind::This),
+            Token::Keyword(KeywordKind::True),
+            Token::Keyword(KeywordKind::Var),
+            Token::Keyword(KeywordKind::While),
         ];
 
         check(actual, expected);
@@ -429,7 +425,7 @@ mod test {
             .map(|x| x.unwrap_or_else(|e| panic!("{:?}", e)))
             .collect::<Vec<_>>();
 
-        let expected = vec![LexToken::String {
+        let expected = vec![Token::String {
             value: "some string value".to_string(),
         }];
 
@@ -447,15 +443,15 @@ mod test {
             .collect::<Vec<_>>();
 
         let expected = vec![
-            LexToken::Keyword(KeywordToken::Var),
-            LexToken::Identifier {
+            Token::Keyword(KeywordKind::Var),
+            Token::Identifier {
                 value: "x".to_string(),
             },
-            LexToken::Literal(LiteralToken::Eq),
-            LexToken::String {
+            Token::Literal(LiteralKind::Eq),
+            Token::String {
                 value: "some string value".to_string(),
             },
-            LexToken::Literal(LiteralToken::SemiColon),
+            Token::Literal(LiteralKind::SemiColon),
         ];
 
         check(actual, expected);
@@ -472,17 +468,17 @@ mod test {
             .collect::<Vec<_>>();
 
         let expected = vec![
-            LexToken::Number {
+            Token::Number {
                 raw: "1".to_string(),
                 value: 1.0,
             },
-            LexToken::Literal(LiteralToken::Plus),
-            LexToken::Number {
+            Token::Literal(LiteralKind::Plus),
+            Token::Number {
                 raw: "2".to_string(),
                 value: 2.0,
             },
-            LexToken::Literal(LiteralToken::Minus),
-            LexToken::Number {
+            Token::Literal(LiteralKind::Minus),
+            Token::Number {
                 raw: "3".to_string(),
                 value: 3.0,
             },
@@ -502,25 +498,25 @@ mod test {
             .collect::<Vec<_>>();
 
         let expected = vec![
-            LexToken::Number {
+            Token::Number {
                 raw: "123".to_string(),
                 value: 123.0,
             },
-            LexToken::Number {
+            Token::Number {
                 raw: "123.456".to_string(),
                 value: 123.456,
             },
-            LexToken::Literal(LiteralToken::Dot),
-            LexToken::Number {
+            Token::Literal(LiteralKind::Dot),
+            Token::Number {
                 raw: "456".to_string(),
                 value: 456.0,
             },
-            LexToken::Number {
+            Token::Number {
                 raw: "123".to_string(),
                 value: 123.0,
             },
-            LexToken::Literal(LiteralToken::Dot),
-            LexToken::Number {
+            Token::Literal(LiteralKind::Dot),
+            Token::Number {
                 raw: "42.42".to_string(),
                 value: 42.42,
             },
@@ -540,25 +536,25 @@ mod test {
             .collect::<Vec<_>>();
 
         let expected = vec![
-            LexToken::Literal(LiteralToken::LeftParen),
-            LexToken::Identifier {
+            Token::Literal(LiteralKind::LeftParen),
+            Token::Identifier {
                 value: "foo".to_string(),
             },
-            LexToken::Literal(LiteralToken::Comma),
-            LexToken::Identifier {
+            Token::Literal(LiteralKind::Comma),
+            Token::Identifier {
                 value: "bar".to_string(),
             },
-            LexToken::Literal(LiteralToken::Comma),
-            LexToken::Identifier {
+            Token::Literal(LiteralKind::Comma),
+            Token::Identifier {
                 value: "baz".to_string(),
             },
-            LexToken::Literal(LiteralToken::RightParen),
+            Token::Literal(LiteralKind::RightParen),
         ];
 
         check(actual, expected);
     }
 
-    fn check(actual: Vec<LexToken>, expected: Vec<LexToken>) {
+    fn check(actual: Vec<Token>, expected: Vec<Token>) {
         assert_eq!(actual.len(), expected.len());
         assert_equal(actual, expected);
     }
