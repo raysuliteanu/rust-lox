@@ -1,5 +1,6 @@
 use miette::{Diagnostic, SourceSpan};
 use std::{fmt::Display, str::Chars};
+use strum::IntoStaticStr;
 use thiserror::Error;
 
 pub struct Lexer<'le> {
@@ -251,7 +252,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, IntoStaticStr)]
 pub enum KeywordKind {
     And,
     Class,
@@ -273,24 +274,12 @@ pub enum KeywordKind {
 
 impl Display for KeywordKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            KeywordKind::And => write!(f, "AND and null"),
-            KeywordKind::Class => write!(f, "CLASS class null"),
-            KeywordKind::Else => write!(f, "ELSE else null"),
-            KeywordKind::False => write!(f, "FALSE false null"),
-            KeywordKind::For => write!(f, "FOR for null"),
-            KeywordKind::Fun => write!(f, "FUN fun null"),
-            KeywordKind::If => write!(f, "IF if null"),
-            KeywordKind::Nil => write!(f, "NIL nil null"),
-            KeywordKind::Or => write!(f, "OR or null"),
-            KeywordKind::Print => write!(f, "PRINT print null"),
-            KeywordKind::Return => write!(f, "RETURN return null"),
-            KeywordKind::Super => write!(f, "SUPER super null"),
-            KeywordKind::This => write!(f, "THIS this null"),
-            KeywordKind::True => write!(f, "TRUE true null"),
-            KeywordKind::Var => write!(f, "VAR var null"),
-            KeywordKind::While => write!(f, "WHILE while null"),
-        }
+        write!(
+            f,
+            "{} {} null",
+            <&KeywordKind as Into<&'static str>>::into(self).to_uppercase(),
+            <&KeywordKind as Into<&'static str>>::into(self).to_lowercase()
+        )
     }
 }
 
