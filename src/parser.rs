@@ -18,6 +18,16 @@ pub struct Parser<'pa> {
 
 type ParserResult = Result<Node, miette::Error>;
 
+macro_rules! binary_node {
+    ($l:ident,$m:ident,$r:ident) => {
+        Node::Expr(Box::new(Expr::Binary(
+            Box::new($l),
+            Node::Terminal($m),
+            Box::new($r),
+        )))
+    };
+}
+
 impl<'pa> Parser<'pa> {
     pub(crate) fn new(lexer: Peekable<Lexer<'pa>>) -> Self {
         Self { lexer }
@@ -56,11 +66,7 @@ impl<'pa> Parser<'pa> {
             trace!("matched '!=' | '=='");
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.comparison()?;
-            left = Node::Expr(Box::new(Expr::Binary(
-                Box::new(left),
-                Node::Terminal(op),
-                Box::new(right),
-            )));
+            left = binary_node!(left, op, right);
         }
 
         Ok(left)
@@ -81,11 +87,7 @@ impl<'pa> Parser<'pa> {
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.term()?;
 
-            left = Node::Expr(Box::new(Expr::Binary(
-                Box::new(left),
-                Node::Terminal(op),
-                Box::new(right),
-            )));
+            left = binary_node!(left, op, right);
         }
 
         Ok(left)
@@ -104,11 +106,7 @@ impl<'pa> Parser<'pa> {
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.factor()?;
 
-            left = Node::Expr(Box::new(Expr::Binary(
-                Box::new(left),
-                Node::Terminal(op),
-                Box::new(right),
-            )));
+            left = binary_node!(left, op, right);
         }
 
         Ok(left)
@@ -125,11 +123,7 @@ impl<'pa> Parser<'pa> {
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.unary()?;
 
-            left = Node::Expr(Box::new(Expr::Binary(
-                Box::new(left),
-                Node::Terminal(op),
-                Box::new(right),
-            )));
+            left = binary_node!(left, op, right);
         }
 
         Ok(left)
@@ -271,6 +265,22 @@ enum _Stmt {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn binary_node_macro() {
+        let l = Node::Terminal(Token::Number {
+            raw: "1.23".to_string(),
+            value: 1.23,
+        });
+        let m = Token::Literal(LiteralKind::Star);
+        let r = Node::Terminal(Token::Number {
+            raw: "1.23".to_string(),
+            value: 1.23,
+        });
+        let node = binary_node!(l, m, r);
+        let fmt = format!("{node}");
+        assert_eq!(fmt, "1.23 * 1.23");
+    }
 
     #[test]
     fn print_ast() {
