@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::iter::Peekable;
 
+use log::trace;
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -42,7 +43,7 @@ impl<'pa> Parser<'pa> {
     }
 
     fn equality(&mut self) -> ParserResult {
-        eprintln!("equality()");
+        trace!("equality()");
 
         let mut left = self.comparison()?;
 
@@ -50,7 +51,7 @@ impl<'pa> Parser<'pa> {
             Token::Literal(LiteralKind::BangEq),
             Token::Literal(LiteralKind::EqEq),
         ]) {
-            eprintln!("matched '!=' | '=='");
+            trace!("matched '!=' | '=='");
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.comparison()?;
             left = Node::Expr(Box::new(Expr::Binary(
@@ -64,7 +65,7 @@ impl<'pa> Parser<'pa> {
     }
 
     fn comparison(&mut self) -> ParserResult {
-        eprintln!("comparison()");
+        trace!("comparison()");
 
         let mut left = self.term()?;
 
@@ -74,7 +75,7 @@ impl<'pa> Parser<'pa> {
             Token::Literal(LiteralKind::Less),
             Token::Literal(LiteralKind::LessEq),
         ]) {
-            eprintln!("matched comparison");
+            trace!("matched comparison");
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.term()?;
 
@@ -89,7 +90,7 @@ impl<'pa> Parser<'pa> {
     }
 
     fn term(&mut self) -> ParserResult {
-        eprintln!("term()");
+        trace!("term()");
 
         let mut left = self.factor()?;
 
@@ -97,7 +98,7 @@ impl<'pa> Parser<'pa> {
             Token::Literal(LiteralKind::Plus),
             Token::Literal(LiteralKind::Minus),
         ]) {
-            eprintln!("matched '+' | '-'");
+            trace!("matched '+' | '-'");
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.factor()?;
 
@@ -112,13 +113,13 @@ impl<'pa> Parser<'pa> {
     }
 
     fn factor(&mut self) -> ParserResult {
-        eprintln!("factor()");
+        trace!("factor()");
         let mut left = self.unary()?;
         while self.matches(&[
             Token::Literal(LiteralKind::Star),
             Token::Literal(LiteralKind::Slash),
         ]) {
-            eprintln!("matched '*' | '/'");
+            trace!("matched '*' | '/'");
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.unary()?;
 
@@ -133,12 +134,12 @@ impl<'pa> Parser<'pa> {
     }
 
     fn unary(&mut self) -> ParserResult {
-        eprintln!("unary()");
+        trace!("unary()");
         if self.matches(&[
             Token::Literal(LiteralKind::Minus),
             Token::Literal(LiteralKind::Bang),
         ]) {
-            eprintln!("matched unary '!' | '-'");
+            trace!("matched unary '!' | '-'");
             let op = self.lexer.next().unwrap().unwrap();
             let right = self.unary()?;
 
@@ -152,7 +153,7 @@ impl<'pa> Parser<'pa> {
     }
 
     fn primary(&mut self) -> ParserResult {
-        eprintln!("primary()");
+        trace!("primary()");
 
         if self.matches(&[Token::Keyword(token::KeywordKind::True)]) {
             return Ok(Node::Terminal(Token::Keyword(token::KeywordKind::True)));
@@ -178,23 +179,23 @@ impl<'pa> Parser<'pa> {
             return Ok(Node::Expr(Box::new(Expr::Group(Box::new(expr)))));
         }
 
-        eprintln!("checking for number, string, identifier");
+        trace!("checking for number, string, identifier");
         if let Some(token) = self.lexer.next() {
             match token {
                 Ok(t) => match t {
                     Token::Number { .. } | Token::String { .. } | Token::Identifier { .. } => {
-                        eprintln!("matched '{t}'");
+                        trace!("matched '{t}'");
                         Ok(Node::Terminal(t))
                     }
                     _ => {
-                        eprintln!("unexpected token '{t}'");
+                        trace!("unexpected token '{t}'");
                         Err(Eof.into())
                     }
                 },
                 Err(e) => Err(e),
             }
         } else {
-            eprintln!("lexer.next() returned None");
+            trace!("lexer.next() returned None");
             Err(Eof.into())
         }
     }

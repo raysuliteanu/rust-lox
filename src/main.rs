@@ -22,6 +22,8 @@ enum LoxCommands {
 }
 
 fn main() -> Result<ExitCode, miette::Error> {
+    env_logger::init();
+
     let lox = Lox::parse();
 
     let exit_code = match &lox.commands {
