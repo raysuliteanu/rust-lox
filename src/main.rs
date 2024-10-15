@@ -56,16 +56,12 @@ pub fn tokenize(lexer: Lexer) -> Result<u8, miette::Error> {
             }
             Err(e) => {
                 exit_code = 65;
-                println!("{e}");
-                // for cc want to continue here and print all errors
-                // but don't get nice miette format; cc doesn't care about stderr
-                // not sure if there's a better way to force it, but ...
-                eprintln!("{:?}", Err::<(), miette::Error>(e));
+                eprintln!("{e}");
             }
         }
     }
 
-    println!("EOF");
+    println!("EOF  null");
 
     Ok(exit_code)
 }
@@ -79,15 +75,9 @@ pub fn parse(parser: &mut parser::Parser) -> Result<u8, miette::Error> {
         }
         Err(e) => {
             exit_code = 65;
-            println!("{e}");
-            // for cc want to continue here and print all errors
-            // but don't get nice miette format; cc doesn't care about stderr
-            // not sure if there's a better way to force it, but ...
-            eprintln!("{:?}", Err::<(), miette::Error>(e));
+            eprintln!("{e}");
         }
     }
-
-    println!("EOF");
 
     Ok(exit_code)
 }
