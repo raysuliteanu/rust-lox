@@ -2,6 +2,7 @@ use crate::parser::Ast;
 use crate::parser::Expr;
 use crate::parser::Node;
 use crate::token::{KeywordKind, LiteralKind, Token};
+use miette::miette;
 use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
 
@@ -62,8 +63,8 @@ impl Interpreter {
         let left = self.evaluate_all(left)?;
         let right = self.evaluate_all(right)?;
         match op {
-            Node::Terminal(t) => match t {
-                Token::Literal(l) => match l {
+            Node::Terminal(token) => match token {
+                Token::Literal(literal) => match literal {
                     LiteralKind::Plus => {
                         match left {
                             InterpreterValue::Float(f_l) => match right {
@@ -90,10 +91,7 @@ impl Interpreter {
                                     ))
                                 }
                             },
-                            InterpreterValue::Bool(_) => {
-                                // todo: to take advantage of miette would be nice to have row/col info here
-                                Err(miette::miette!("invalid operation {op} for {left}"))
-                            }
+                            _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
                         }
                     }
                     // LiteralKind::Minus => {}
@@ -105,11 +103,38 @@ impl Interpreter {
                     // LiteralKind::LessEq => {}
                     // LiteralKind::Greater => {}
                     // LiteralKind::GreaterEq => {}
-                    _ => todo!("invalid {l}"),
+                    _ => todo!("{literal}"),
                 },
-                _ => todo!("invalid {t}"),
+                Token::Keyword(keyword) => match keyword {
+                    KeywordKind::And => match left {
+                        InterpreterValue::Bool(l_b) => match right {
+                            InterpreterValue::Bool(r_b) => Ok(InterpreterValue::Bool(l_b && r_b)),
+                            _ => {
+                                // todo: to take advantage of miette would be nice to have row/col info here
+                                Err(miette::miette!(
+                                    "type mismatch - can't 'and' {left} and {right}"
+                                ))
+                            }
+                        },
+                        _ => Err(miette!("invalid operation {op} for {left}"))?,
+                    },
+                    KeywordKind::Or => match left {
+                        InterpreterValue::Bool(l_b) => match right {
+                            InterpreterValue::Bool(r_b) => Ok(InterpreterValue::Bool(l_b || r_b)),
+                            _ => {
+                                // todo: to take advantage of miette would be nice to have row/col info here
+                                Err(miette::miette!(
+                                    "type mismatch - can't 'or' {left} and {right}"
+                                ))
+                            }
+                        },
+                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                    },
+                    _ => todo!("{keyword}"),
+                },
+                _ => todo!("{token}"),
             },
-            _ => todo!("invalid {op}"),
+            _ => todo!("{op}"),
         }
     }
 }
