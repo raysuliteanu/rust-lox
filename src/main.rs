@@ -49,8 +49,8 @@ fn main() -> Result<ExitCode, miette::Error> {
             let mut parser = parser::Parser::new(lexer.peekable());
 
             let ast = parser.parse()?;
-            let interpretter = interpret::Interpreter::new(ast);
-            let value = interpretter.evaluate();
+            let interpreter = interpret::Interpreter::new(ast);
+            let value = interpreter.evaluate();
             match value {
                 Ok(t) => {
                     println!("{t}");
