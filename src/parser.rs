@@ -207,7 +207,7 @@ impl<'pa> Parser<'pa> {
 }
 
 pub struct Ast {
-    tree: Node,
+    pub tree: Node,
 }
 
 impl Display for Ast {
@@ -216,7 +216,7 @@ impl Display for Ast {
     }
 }
 
-enum Node {
+pub enum Node {
     Terminal(Token),
     Expr(Box<Expr>),
 }
@@ -240,7 +240,7 @@ impl Display for Node {
     }
 }
 
-enum Expr {
+pub enum Expr {
     Unary(Node, Box<Node>),
     Binary(Box<Node>, Node, Box<Node>),
     Group(Box<Node>),

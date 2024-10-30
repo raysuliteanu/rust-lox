@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::{fs, str};
 
+mod interpret;
 mod parser;
 mod token;
 
@@ -41,7 +42,26 @@ fn main() -> Result<ExitCode, miette::Error> {
             let mut parser = parser::Parser::new(lexer.peekable());
             parse(&mut parser)?
         }
-        LoxCommands::Evaluate { .. } => todo!(),
+        LoxCommands::Evaluate { filename } => {
+            let source = get_source(filename)?;
+
+            let lexer = Lexer::new(filename.display().to_string(), source.as_str());
+            let mut parser = parser::Parser::new(lexer.peekable());
+
+            let ast = parser.parse()?;
+            let interpretter = interpret::Interpreter::new(ast);
+            let value = interpretter.evaluate();
+            match value {
+                Ok(t) => {
+                    println!("{t}");
+                    0u8
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    65u8
+                }
+            }
+        }
     };
 
     Ok(ExitCode::from(exit_code))
