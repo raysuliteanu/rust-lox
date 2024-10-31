@@ -88,12 +88,20 @@ impl Interpreter {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l - f_r)),
                             _ => Err(miette::miette!(
-                                "type mismatch - can't subtract {right} from {right}"
+                                "type mismatch - can't subtract {right} from {left}"
                             )),
                         },
                         _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
                     },
-                    // LiteralKind::Star => {}
+                    LiteralKind::Star => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l * f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't multiply {left} and {right}"
+                            )),
+                        },
+                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                    },
                     // LiteralKind::Slash => {}
                     // LiteralKind::EqEq => {}
                     // LiteralKind::BangEq => {}
