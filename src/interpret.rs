@@ -102,7 +102,15 @@ impl Interpreter {
                         },
                         _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
                     },
-                    // LiteralKind::Slash => {}
+                    LiteralKind::Slash => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l / f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't divide {left} and {right}"
+                            )),
+                        },
+                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                    },
                     // LiteralKind::EqEq => {}
                     // LiteralKind::BangEq => {}
                     // LiteralKind::Less => {}
