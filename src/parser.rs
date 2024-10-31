@@ -173,15 +173,29 @@ impl<'pa> Parser<'pa> {
 
             let expr = self.expression()?;
 
-            trace!("expecting ')' and consuming it");
-
-            // eat right paren
-            assert!(self
-                .lexer
-                .next()
-                .is_some_and(|r| r.is_ok_and(|t| t == Token::Literal(LiteralKind::RightParen))));
-
-            return Ok(Node::Expr(Box::new(Expr::Group(Box::new(expr)))));
+            match self.lexer.next() {
+                Some(r) => match r {
+                    Ok(t) => {
+                        if t == Token::Literal(LiteralKind::RightParen) {
+                            let group = Node::Expr(Box::new(Expr::Group(Box::new(expr))));
+                            trace!("matched ')'; consuming it and returning group {group}");
+                            return Ok(group);
+                        } else {
+                            return Err(MissingToken {
+                                expected: Token::Literal(LiteralKind::RightParen),
+                                actual: t,
+                            }
+                            .into());
+                        }
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
+                },
+                None => {
+                    return Err(UnexpectedEof.into());
+                }
+            }
         }
 
         trace!("checking for number, string, identifier");
@@ -194,14 +208,14 @@ impl<'pa> Parser<'pa> {
                     }
                     _ => {
                         trace!("unexpected token '{t}'");
-                        Err(Eof.into())
+                        Err(UnexpectedEof.into())
                     }
                 },
                 Err(e) => Err(e),
             }
         } else {
             trace!("lexer.next() returned None");
-            Err(Eof.into())
+            Err(UnexpectedEof.into())
         }
     }
 }
@@ -258,7 +272,14 @@ impl Display for Expr {
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("Unexpected EOF")]
-pub struct Eof;
+pub struct UnexpectedEof;
+
+#[derive(Error, Debug, Diagnostic)]
+#[error("missing token {expected} got {actual}")]
+pub struct MissingToken {
+    expected: Token,
+    actual: Token,
+}
 
 enum _Stmt {}
 
