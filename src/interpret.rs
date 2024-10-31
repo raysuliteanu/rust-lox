@@ -65,36 +65,34 @@ impl Interpreter {
         match op {
             Node::Terminal(token) => match token {
                 Token::Literal(literal) => match literal {
-                    LiteralKind::Plus => {
-                        match left {
-                            InterpreterValue::Float(f_l) => match right {
-                                InterpreterValue::Float(f_r) => {
-                                    Ok(InterpreterValue::Float(f_l + f_r))
-                                }
-                                _ => {
-                                    // todo: to take advantage of miette would be nice to have row/col info here
-                                    Err(miette::miette!(
-                                        "type mismatch - can't add {left} to {right}"
-                                    ))
-                                }
-                            },
-                            InterpreterValue::String(ref s_l) => match right {
-                                InterpreterValue::String(s_r) => {
-                                    let mut s = String::from(s_l);
-                                    s.push_str(s_r.as_str());
-                                    Ok(InterpreterValue::String(s))
-                                }
-                                _ => {
-                                    // todo: to take advantage of miette would be nice to have row/col info here
-                                    Err(miette::miette!(
-                                        "type mismatch - can't add {left} to {right}"
-                                    ))
-                                }
-                            },
-                            _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
-                        }
-                    }
-                    // LiteralKind::Minus => {}
+                    LiteralKind::Plus => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l + f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't add {left} to {right}"
+                            )),
+                        },
+                        InterpreterValue::String(ref s_l) => match right {
+                            InterpreterValue::String(s_r) => {
+                                let mut s = String::from(s_l);
+                                s.push_str(s_r.as_str());
+                                Ok(InterpreterValue::String(s))
+                            }
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't add {left} to {right}"
+                            )),
+                        },
+                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                    },
+                    LiteralKind::Minus => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l - f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't subtract {right} from {right}"
+                            )),
+                        },
+                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                    },
                     // LiteralKind::Star => {}
                     // LiteralKind::Slash => {}
                     // LiteralKind::EqEq => {}
@@ -121,12 +119,9 @@ impl Interpreter {
                     KeywordKind::Or => match left {
                         InterpreterValue::Bool(l_b) => match right {
                             InterpreterValue::Bool(r_b) => Ok(InterpreterValue::Bool(l_b || r_b)),
-                            _ => {
-                                // todo: to take advantage of miette would be nice to have row/col info here
-                                Err(miette::miette!(
-                                    "type mismatch - can't 'or' {left} and {right}"
-                                ))
-                            }
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't 'or' {left} and {right}"
+                            )),
                         },
                         _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
                     },
