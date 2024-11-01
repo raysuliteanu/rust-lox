@@ -111,8 +111,50 @@ impl Interpreter {
                         },
                         _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
                     },
-                    // LiteralKind::EqEq => {}
-                    // LiteralKind::BangEq => {}
+                    LiteralKind::EqEq => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l == f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't divide {left} and {right}"
+                            )),
+                        },
+                        InterpreterValue::String(ref s_l) => match right {
+                            InterpreterValue::String(ref s_r) => {
+                                Ok(InterpreterValue::Bool(s_l == s_r))
+                            }
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't compare {left} to {right}"
+                            )),
+                        },
+                        InterpreterValue::Bool(s_l) => match right {
+                            InterpreterValue::Bool(s_r) => Ok(InterpreterValue::Bool(s_l == s_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't compare {left} to {right}"
+                            )),
+                        },
+                    },
+                    LiteralKind::BangEq => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l != f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't divide {left} and {right}"
+                            )),
+                        },
+                        InterpreterValue::String(ref s_l) => match right {
+                            InterpreterValue::String(ref s_r) => {
+                                Ok(InterpreterValue::Bool(s_l != s_r))
+                            }
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't compare {left} to {right}"
+                            )),
+                        },
+                        InterpreterValue::Bool(s_l) => match right {
+                            InterpreterValue::Bool(s_r) => Ok(InterpreterValue::Bool(s_l != s_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't compare {left} to {right}"
+                            )),
+                        },
+                    },
                     // LiteralKind::Less => {}
                     // LiteralKind::LessEq => {}
                     // LiteralKind::Greater => {}
