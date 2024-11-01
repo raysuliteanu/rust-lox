@@ -226,7 +226,7 @@ pub struct Ast {
 
 impl Display for Ast {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.tree)
+        write!(f, "({})", self.tree)
     }
 }
 
