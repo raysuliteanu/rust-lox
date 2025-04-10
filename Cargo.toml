@@ -2,14 +2,14 @@
 name = "rust-lox"
 version = "0.1.0"
 authors = ["Ray Suliteanu <raysuliteanu@pm.me>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-bytes = "1.7.2"                                      # helps manage buffers
-clap = { version = "4.5.20", features = ["derive"] }
-env_logger = "0.11.5"
-itertools = "0.13.0"
-log = "0.4.22"
-miette = { version = "7.2.0", features = ["fancy"] }
-strum = { version = "0.26.3", features = ["derive"] }
-thiserror = "1.0.64"                                 # error handling
+bytes = "1.10.1"
+clap = { version = "4.5.35", features = ["derive"] }
+env_logger = "0.11.8"
+itertools = "0.14.0"
+log = "0.4.27"
+miette = { version = "7.5.0", features = ["fancy"] }
+strum = { version = "0.27.1", features = ["derive"] }
+thiserror = "2.0.12"
