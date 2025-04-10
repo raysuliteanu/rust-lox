@@ -1,13 +1,10 @@
-use crate::token::Lexer;
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Report, WrapErr};
+use rust_lox::token::Lexer;
+use rust_lox::{interpret, parser};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::{fs, str};
-
-mod interpret;
-mod parser;
-mod token;
 
 #[derive(Parser)]
 struct Lox {
@@ -33,7 +30,7 @@ fn main() -> Result<ExitCode, miette::Error> {
 
             let lexer = Lexer::new(filename.display().to_string(), source.as_str());
 
-            tokenize(lexer)?
+            lexer.tokenize()?
         }
         LoxCommands::Parse { filename } => {
             let source = get_source(filename)?;
@@ -65,25 +62,6 @@ fn main() -> Result<ExitCode, miette::Error> {
     };
 
     Ok(ExitCode::from(exit_code))
-}
-
-pub fn tokenize(lexer: Lexer) -> Result<u8, miette::Error> {
-    let mut exit_code = 0u8;
-    for next in lexer {
-        match next {
-            Ok(t) => {
-                println!("{t}");
-            }
-            Err(e) => {
-                exit_code = 65;
-                eprintln!("{e}");
-            }
-        }
-    }
-
-    println!("EOF  null");
-
-    Ok(exit_code)
 }
 
 pub fn parse(parser: &mut parser::Parser) -> Result<u8, miette::Error> {

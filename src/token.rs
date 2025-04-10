@@ -20,6 +20,25 @@ impl<'le> Lexer<'le> {
         }
     }
 
+    pub fn tokenize(self) -> Result<u8, miette::Error> {
+        let mut exit_code = 0u8;
+        for next in self {
+            match next {
+                Ok(t) => {
+                    println!("{t}");
+                }
+                Err(e) => {
+                    exit_code = 65;
+                    eprintln!("{e}");
+                }
+            }
+        }
+
+        println!("EOF  null");
+
+        Ok(exit_code)
+    }
+
     #[cfg(test)]
     pub fn new_from_string(source: &'le str) -> Self {
         Self::new("test".to_string(), source)
