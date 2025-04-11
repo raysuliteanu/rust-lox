@@ -272,7 +272,7 @@ pub enum Expr {
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Unary(t, e) => write!(f, "{t} {e}"),
+            Expr::Unary(t, e) => write!(f, "({t} {e})"),
             Expr::Binary(l, t, r) => write!(f, "{l} {t} {r}"),
             Expr::Group(e) => write!(f, "(group {})", e),
         }
