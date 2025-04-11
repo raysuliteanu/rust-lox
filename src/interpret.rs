@@ -17,6 +17,7 @@ pub enum InterpreterValue {
     Bool(bool),
     Float(f64),
     String(String),
+    Nil,
 }
 
 impl Display for InterpreterValue {
@@ -25,6 +26,7 @@ impl Display for InterpreterValue {
             InterpreterValue::Bool(v) => write!(f, "{v}"),
             InterpreterValue::Float(v) => write!(f, "{v}"),
             InterpreterValue::String(v) => write!(f, "{v}"),
+            InterpreterValue::Nil => write!(f, "nil"),
         }
     }
 }
@@ -43,7 +45,7 @@ impl Interpreter {
             Node::Terminal(t) => Interpreter::eval_literal(t),
             Node::Expr(exp) => match exp.borrow() {
                 Expr::Binary(l, op, r) => self.eval_binary_exp(l, op, r),
-                Expr::Unary(_op, _exp) => todo!(),
+                Expr::Unary(_op, _exp) => todo!("unary expressions"),
                 Expr::Group(group_exp) => self.evaluate_all(group_exp),
             },
         }
@@ -55,6 +57,7 @@ impl Interpreter {
             Token::String { value } => Ok(InterpreterValue::String(value.clone())),
             Token::Keyword(KeywordKind::True) => Ok(InterpreterValue::Bool(true)),
             Token::Keyword(KeywordKind::False) => Ok(InterpreterValue::Bool(false)),
+            Token::Keyword(KeywordKind::Nil) => Ok(InterpreterValue::Nil),
             _ => unimplemented!("{:?}", token),
         }
     }
@@ -132,6 +135,7 @@ impl Interpreter {
                                 "type mismatch - can't compare {left} to {right}"
                             )),
                         },
+                        InterpreterValue::Nil => todo!("comparison with nil"),
                     },
                     LiteralKind::BangEq => match left {
                         InterpreterValue::Float(f_l) => match right {
@@ -154,6 +158,7 @@ impl Interpreter {
                                 "type mismatch - can't compare {left} to {right}"
                             )),
                         },
+                        InterpreterValue::Nil => todo!("comparison with nil"),
                     },
                     // LiteralKind::Less => {}
                     // LiteralKind::LessEq => {}
