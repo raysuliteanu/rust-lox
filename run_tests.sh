@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# TODO: sort tests properly by test number i.e. numerically
+# not lexicographically
+
 GREEN=$(echo -e '\033[0;32m')
 RED=$(echo -e '\033[0;31m')
 RESET=$(echo -e '\033[0m')
@@ -8,13 +11,15 @@ CARGO_RUN="cargo -q run -- "
 
 TOKENIZE_TEST_FILES=$(find "$(pwd)" -type f -name "tokenize_test*.lox" | sort)
 PARSE_TEST_FILES=$(find "$(pwd)" -type f -name "parse_test*.lox" | sort)
+EVALUATE_TEST_FILES=$(find "$(pwd)" -type f -name "evaluate_test*.lox" | sort)
 
 RESULT=0
 
 usage() {
-	echo "run_tests.sh [tokenize|parse] [test_file]"
+	echo "run_tests.sh [tokenize|parse|evaluate] [test_file]"
 	echo "  tokenize: Run all tokenize tests"
 	echo "  parse: Run all parse tests"
+	echo "  evaluate: Run all evaluate tests"
 	echo "  test_file: Run a specific test file"
 	echo "  If no arguments are provided, all tests will be run."
 }
@@ -67,6 +72,7 @@ case $# in
 0)
 	run_tests tokenize "$TOKENIZE_TEST_FILES"
 	run_tests parse "$PARSE_TEST_FILES"
+	run_tests evaluate "$EVALUATE_TEST_FILES"
 	;;
 1)
 	case $1 in
@@ -75,6 +81,9 @@ case $# in
 		;;
 	"parse")
 		run_tests parse "$PARSE_TEST_FILES"
+		;;
+	"evaluate")
+		run_tests evaluate "$EVALUATE_TEST_FILES"
 		;;
 	*)
 		echo "${RED}Unknown operation type: $1${RESET}"
@@ -85,7 +94,7 @@ case $# in
 	;;
 2)
 	case $1 in
-	"tokenize" | "parse")
+	"tokenize" | "parse" | "evaluate")
 		run_test "$1" "$2"
 		;;
 	*)
