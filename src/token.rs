@@ -169,7 +169,7 @@ impl<'le> Lexer<'le> {
     }
 }
 
-impl<'le> Iterator for Lexer<'le> {
+impl Iterator for Lexer<'_> {
     type Item = Result<Token, miette::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {

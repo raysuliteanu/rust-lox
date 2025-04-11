@@ -8,15 +8,14 @@ use thiserror::Error;
 
 use crate::token;
 use crate::token::KeywordKind;
-use crate::token::Lexer;
 use crate::token::LiteralKind;
 use crate::token::Token;
 
-pub struct Parser<'pa> {
-    lexer: Peekable<Lexer<'pa>>,
+pub struct Parser<T: Iterator> {
+    lexer: Peekable<T>,
 }
 
-type ParserResult = Result<Node, miette::Error>;
+pub type ParserResult<T> = Result<T, miette::Error>;
 
 macro_rules! binary_node {
     ($l:ident,$m:ident,$r:ident) => {
@@ -28,8 +27,11 @@ macro_rules! binary_node {
     };
 }
 
-impl<'pa> Parser<'pa> {
-    pub(crate) fn new(lexer: Peekable<Lexer<'pa>>) -> Self {
+impl<T> Parser<T>
+where
+    T: Iterator<Item = Result<Token, miette::Error>>,
+{
+    pub fn new(lexer: Peekable<T>) -> Self {
         Self { lexer }
     }
 
@@ -50,11 +52,11 @@ impl<'pa> Parser<'pa> {
         }
     }
 
-    fn expression(&mut self) -> ParserResult {
+    fn expression(&mut self) -> ParserResult<Node> {
         self.equality()
     }
 
-    fn equality(&mut self) -> ParserResult {
+    fn equality(&mut self) -> ParserResult<Node> {
         trace!("equality()");
 
         let mut left = self.comparison()?;
@@ -72,7 +74,7 @@ impl<'pa> Parser<'pa> {
         Ok(left)
     }
 
-    fn comparison(&mut self) -> ParserResult {
+    fn comparison(&mut self) -> ParserResult<Node> {
         trace!("comparison()");
 
         let mut left = self.term()?;
@@ -93,7 +95,7 @@ impl<'pa> Parser<'pa> {
         Ok(left)
     }
 
-    fn term(&mut self) -> ParserResult {
+    fn term(&mut self) -> ParserResult<Node> {
         trace!("term()");
 
         let mut left = self.factor()?;
@@ -112,7 +114,7 @@ impl<'pa> Parser<'pa> {
         Ok(left)
     }
 
-    fn factor(&mut self) -> ParserResult {
+    fn factor(&mut self) -> ParserResult<Node> {
         trace!("factor()");
         let mut left = self.unary()?;
         while self.matches(&[
@@ -129,7 +131,7 @@ impl<'pa> Parser<'pa> {
         Ok(left)
     }
 
-    fn unary(&mut self) -> ParserResult {
+    fn unary(&mut self) -> ParserResult<Node> {
         trace!("unary()");
         if self.matches(&[
             Token::Literal(LiteralKind::Minus),
@@ -148,7 +150,7 @@ impl<'pa> Parser<'pa> {
         }
     }
 
-    fn primary(&mut self) -> ParserResult {
+    fn primary(&mut self) -> ParserResult<Node> {
         trace!("primary()");
 
         if self.matches(&[Token::Keyword(token::KeywordKind::True)]) {
@@ -226,7 +228,7 @@ pub struct Ast {
 
 impl Display for Ast {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({})", self.tree)
+        write!(f, "{}", self.tree)
     }
 }
 
@@ -246,7 +248,14 @@ impl Display for Node {
                     <&KeywordKind as Into<&'static str>>::into(k).to_lowercase()
                 ),
                 Token::Literal(l) => write!(f, "{}", l.get_message().unwrap()),
-                Token::Number { value, .. } => write!(f, "{value}"),
+                Token::Number { value, .. } => {
+                    if *value == value.trunc() {
+                        // tests require that integers are printed as N.0
+                        write!(f, "{value}.0")
+                    } else {
+                        write!(f, "{value}")
+                    }
+                }
                 Token::Identifier { value } | Token::String { value } => write!(f, "{value}"),
             },
             Node::Expr(e) => write!(f, "{e}"),
@@ -320,6 +329,6 @@ mod tests {
         };
 
         let fmt = format!("{ast}");
-        assert_eq!(fmt, "(1.23 * 1.23)");
+        assert_eq!(fmt, "1.23 * 1.23");
     }
 }

@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Report, WrapErr};
-use rust_lox::token::Lexer;
+use rust_lox::parser::ParserResult;
+use rust_lox::token::{Lexer, Token};
 use rust_lox::{interpret, parser};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -64,7 +65,9 @@ fn main() -> Result<ExitCode, miette::Error> {
     Ok(ExitCode::from(exit_code))
 }
 
-pub fn parse(parser: &mut parser::Parser) -> Result<u8, miette::Error> {
+pub fn parse<T: Iterator<Item = ParserResult<Token>>>(
+    parser: &mut parser::Parser<T>,
+) -> Result<u8, miette::Error> {
     let mut exit_code = 0u8;
     let ast = parser.parse();
     match ast {
