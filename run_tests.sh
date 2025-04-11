@@ -9,6 +9,8 @@ CARGO_RUN="cargo -q run -- "
 TOKENIZE_TEST_FILES=$(find "$(pwd)" -type f -name "tokenize_test*.lox" | sort)
 PARSE_TEST_FILES=$(find "$(pwd)" -type f -name "parse_test*.lox" | sort)
 
+RESULT=0
+
 run_test() {
 	local cmd=$1
 	local files=$2
@@ -25,10 +27,12 @@ run_test() {
 			if ! $CARGO_RUN "$cmd" "$file" >"$out" 2>&1; then
 				echo "${RED}Test failed:${RESET} $base"
 				echo "See file $out"
+				RESULT=1
 			else
 				if ! delta "$dirname/$base.out" "$expected"; then
 					echo "${RED}Test ${base}:${RESET} output does not match expected output"
 					echo "See file: $out"
+					RESULT=1
 				else
 					echo "${GREEN}Test passed:${RESET} $base"
 					rm "$out"
@@ -38,9 +42,16 @@ run_test() {
 			echo "${RED}Missing output comparison file:${RESET} $expected"
 			echo "Skipping test: $base"
 		fi
-
 	done
 }
 
 run_test tokenize "$TOKENIZE_TEST_FILES"
 run_test parse "$PARSE_TEST_FILES"
+
+if [ "$RESULT" -eq 0 ]; then
+	echo "${GREEN}All tests passed!${RESET}"
+else
+	echo "${RED}Some tests failed.${RESET}"
+fi
+
+exit $RESULT
