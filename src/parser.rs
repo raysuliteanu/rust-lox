@@ -309,7 +309,7 @@ mod tests {
         });
         let node = binary_node!(l, m, r);
         let fmt = format!("{node}");
-        assert_eq!(fmt, "1.23 * 1.23");
+        assert_eq!(fmt, "(* 1.23 1.23)");
     }
 
     #[test]
@@ -329,6 +329,6 @@ mod tests {
         };
 
         let fmt = format!("{ast}");
-        assert_eq!(fmt, "1.23 * 1.23");
+        assert_eq!(fmt, "(* 1.23 1.23)");
     }
 }

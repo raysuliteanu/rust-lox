@@ -45,7 +45,7 @@ impl Interpreter {
             Node::Terminal(t) => Interpreter::eval_literal(t),
             Node::Expr(exp) => match exp.borrow() {
                 Expr::Binary(l, op, r) => self.eval_binary_exp(l, op, r),
-                Expr::Unary(_op, _exp) => todo!("unary expressions"),
+                Expr::Unary(op, exp) => self.eval_unary_exp(op, exp),
                 Expr::Group(group_exp) => self.evaluate_all(group_exp),
             },
         }
@@ -193,6 +193,39 @@ impl Interpreter {
                 _ => todo!("{token}"),
             },
             _ => todo!("{op}"),
+        }
+    }
+
+    fn eval_unary_exp(&self, op: &Node, exp: &Node) -> Result<InterpreterValue, miette::Error> {
+        let val = self.evaluate_all(exp)?;
+        match op {
+            Node::Terminal(t) => match val {
+                InterpreterValue::Bool(v) => {
+                    if t.borrow() == &Token::Literal(LiteralKind::Bang) {
+                        Ok(InterpreterValue::Bool(!v))
+                    } else {
+                        Err(miette!("invalid operation {op} for {val}"))?
+                    }
+                }
+                InterpreterValue::Float(v) => {
+                    if t.borrow() == &Token::Literal(LiteralKind::Minus) {
+                        Ok(InterpreterValue::Float(-v))
+                    } else if t.borrow() == &Token::Literal(LiteralKind::Bang) {
+                        Ok(InterpreterValue::Bool(false))
+                    } else {
+                        Err(miette!("invalid operation {op} for {val}"))?
+                    }
+                }
+                InterpreterValue::Nil => {
+                    if t.borrow() == &Token::Literal(LiteralKind::Bang) {
+                        Ok(InterpreterValue::Bool(true))
+                    } else {
+                        Err(miette!("invalid operation {op} for {val}"))?
+                    }
+                }
+                _ => Err(miette!("invalid operation {op} for {val}"))?,
+            },
+            _ => Err(miette!("invalid operation {op} for {val}"))?,
         }
     }
 }
