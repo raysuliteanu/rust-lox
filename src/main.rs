@@ -54,9 +54,16 @@ fn main() -> Result<ExitCode, miette::Error> {
                     println!("{t}");
                     0u8
                 }
+                // TODO: using the miette:Diagnostic 'code' field might work, but should probably
+                // create a type, wrather than duplicating the codes all over the place in the
+                // miette!() macro
                 Err(e) => {
                     eprintln!("{e}");
-                    65u8
+                    if let Some(code) = e.code() {
+                        code.to_string().parse::<u8>().into_diagnostic()?
+                    } else {
+                        1
+                    }
                 }
             }
         }

@@ -71,9 +71,10 @@ impl Interpreter {
                     LiteralKind::Plus => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l + f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't add {left} to {right}"
-                            )),
+                            _ => Err(miette!(
+                                code = "70",
+                                "Operands must be two numbers or two strings."
+                            ))?,
                         },
                         InterpreterValue::String(ref s_l) => match right {
                             InterpreterValue::String(s_r) => {
@@ -81,89 +82,127 @@ impl Interpreter {
                                 s.push_str(s_r.as_str());
                                 Ok(InterpreterValue::String(s))
                             }
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't add {left} to {right}"
-                            )),
+                            _ => Err(miette!(
+                                code = "70",
+                                "Operands must be two numbers or two strings."
+                            ))?,
                         },
-                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                        _ => Err(miette!(
+                            code = "70",
+                            "Operands must be two numbers or two strings."
+                        ))?,
                     },
                     LiteralKind::Minus => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l - f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't subtract {right} from {left}"
-                            )),
+                            _ => Err(miette!(
+                                code = "70",
+                                "Operands must be two numbers or two strings."
+                            ))?,
                         },
-                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                        _ => Err(miette!(
+                            code = "70",
+                            "Operands must be two numbers or two strings."
+                        ))?,
                     },
                     LiteralKind::Star => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l * f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't multiply {left} and {right}"
-                            )),
+                            _ => Err(miette!(code = "70", "Operands must be numbers."))?,
                         },
-                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                        _ => Err(miette!(code = "70", "Operands must be numbers."))?,
                     },
                     LiteralKind::Slash => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l / f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't divide {left} and {right}"
-                            )),
+                            _ => Err(miette!(code = "70", "Operands must be numbers."))?,
                         },
-                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                        _ => Err(miette!(code = "70", "Operands must be numbers."))?,
                     },
                     LiteralKind::EqEq => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l == f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't divide {left} and {right}"
-                            )),
+                            _ => Ok(InterpreterValue::Bool(false)),
                         },
                         InterpreterValue::String(ref s_l) => match right {
                             InterpreterValue::String(ref s_r) => {
                                 Ok(InterpreterValue::Bool(s_l == s_r))
                             }
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't compare {left} to {right}"
-                            )),
+                            _ => Ok(InterpreterValue::Bool(false)),
                         },
                         InterpreterValue::Bool(s_l) => match right {
                             InterpreterValue::Bool(s_r) => Ok(InterpreterValue::Bool(s_l == s_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't compare {left} to {right}"
-                            )),
+                            _ => Ok(InterpreterValue::Bool(false)),
                         },
-                        InterpreterValue::Nil => todo!("comparison with nil"),
+                        InterpreterValue::Nil => match right {
+                            InterpreterValue::Nil => Ok(InterpreterValue::Bool(true)),
+                            _ => Ok(InterpreterValue::Bool(false)),
+                        },
                     },
                     LiteralKind::BangEq => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l != f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't divide {left} and {right}"
-                            )),
+                            _ => Ok(InterpreterValue::Bool(false)),
                         },
                         InterpreterValue::String(ref s_l) => match right {
                             InterpreterValue::String(ref s_r) => {
                                 Ok(InterpreterValue::Bool(s_l != s_r))
                             }
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't compare {left} to {right}"
-                            )),
+                            _ => Ok(InterpreterValue::Bool(false)),
                         },
                         InterpreterValue::Bool(s_l) => match right {
                             InterpreterValue::Bool(s_r) => Ok(InterpreterValue::Bool(s_l != s_r)),
+                            _ => Ok(InterpreterValue::Bool(false)),
+                        },
+                        InterpreterValue::Nil => match right {
+                            InterpreterValue::Nil => Ok(InterpreterValue::Bool(false)),
+                            _ => Ok(InterpreterValue::Bool(true)),
+                        },
+                    },
+                    LiteralKind::Less => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l < f_r)),
                             _ => Err(miette::miette!(
                                 "type mismatch - can't compare {left} to {right}"
                             )),
                         },
-                        InterpreterValue::Nil => todo!("comparison with nil"),
+                        _ => Err(miette::miette!(
+                            "type mismatch - can't compare {left} to {right}"
+                        )),
                     },
-                    // LiteralKind::Less => {}
-                    // LiteralKind::LessEq => {}
-                    // LiteralKind::Greater => {}
-                    // LiteralKind::GreaterEq => {}
+                    LiteralKind::LessEq => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l <= f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't compare {left} to {right}"
+                            )),
+                        },
+                        _ => Err(miette::miette!(
+                            "type mismatch - can't compare {left} to {right}"
+                        )),
+                    },
+                    LiteralKind::Greater => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l > f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't compare {left} to {right}"
+                            )),
+                        },
+                        _ => Err(miette::miette!(
+                            "type mismatch - can't compare {left} to {right}"
+                        )),
+                    },
+                    LiteralKind::GreaterEq => match left {
+                        InterpreterValue::Float(f_l) => match right {
+                            InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l >= f_r)),
+                            _ => Err(miette::miette!(
+                                "type mismatch - can't compare {left} to {right}"
+                            )),
+                        },
+                        _ => Err(miette::miette!(
+                            "type mismatch - can't compare {left} to {right}"
+                        )),
+                    },
                     _ => todo!("{literal}"),
                 },
                 Token::Keyword(keyword) => match keyword {
@@ -204,7 +243,7 @@ impl Interpreter {
                     if t.borrow() == &Token::Literal(LiteralKind::Bang) {
                         Ok(InterpreterValue::Bool(!v))
                     } else {
-                        Err(miette!("invalid operation {op} for {val}"))?
+                        Err(miette!(code = "70", "invalid operation {op} for {val}"))?
                     }
                 }
                 InterpreterValue::Float(v) => {
@@ -213,19 +252,19 @@ impl Interpreter {
                     } else if t.borrow() == &Token::Literal(LiteralKind::Bang) {
                         Ok(InterpreterValue::Bool(false))
                     } else {
-                        Err(miette!("invalid operation {op} for {val}"))?
+                        Err(miette!(code = "70", "Operand must be a number."))?
                     }
                 }
                 InterpreterValue::Nil => {
                     if t.borrow() == &Token::Literal(LiteralKind::Bang) {
                         Ok(InterpreterValue::Bool(true))
                     } else {
-                        Err(miette!("invalid operation {op} for {val}"))?
+                        Err(miette!(code = "70", "invalid operation {op} for {val}"))?
                     }
                 }
-                _ => Err(miette!("invalid operation {op} for {val}"))?,
+                _ => Err(miette!(code = "70", "Operand must be a number."))?,
             },
-            _ => Err(miette!("invalid operation {op} for {val}"))?,
+            _ => Err(miette!(code = "70", "invalid operation {op} for {val}"))?,
         }
     }
 }
