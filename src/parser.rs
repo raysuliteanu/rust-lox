@@ -35,7 +35,12 @@ where
         Self { lexer }
     }
 
-    pub fn parse(&mut self) -> Result<Ast, miette::Error> {
+    pub fn parse(&mut self) -> Result<(), miette::Error> {
+        let ast = self.ast()?;
+        println!("{ast}");
+        Ok(())
+    }
+    pub fn ast(&mut self) -> Result<Ast, miette::Error> {
         Ok(Ast {
             tree: self.expression()?,
         })

@@ -20,23 +20,26 @@ impl<'le> Lexer<'le> {
         }
     }
 
-    pub fn tokenize(self) -> Result<u8, miette::Error> {
-        let mut exit_code = 0u8;
+    pub fn tokenize(self) -> Result<(), miette::Error> {
         for next in self {
             match next {
                 Ok(t) => {
                     println!("{t}");
                 }
                 Err(e) => {
-                    exit_code = 65;
                     eprintln!("{e}");
+                    e.code()
+                        .unwrap_or(Box::new("1"))
+                        .to_string()
+                        .parse::<u8>()
+                        .unwrap(); // with earlier default to "1" parse should never fail
                 }
             }
         }
 
         println!("EOF  null");
 
-        Ok(exit_code)
+        Ok(())
     }
 
     #[cfg(test)]
@@ -225,8 +228,10 @@ impl Iterator for Lexer<'_> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("[line {}] Error: Unexpected character: {}", .src[..=.span.offset() - 1].lines().count(), .src.chars().nth(.span.offset() - 1).unwrap()
-)]
+#[error("[line {}] Error: Unexpected character: {}", 
+    .src[..=.span.offset() - 1].lines().count(), 
+    .src.chars().nth(.span.offset() - 1).unwrap())]
+#[diagnostic(code("65"))]
 pub struct InvalidToken {
     #[source_code]
     src: String,
@@ -235,7 +240,9 @@ pub struct InvalidToken {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("[line {}] Error: Unterminated string.", .src[..=.span.offset() - 1].lines().count())]
+#[error("[line {}] Error: Unterminated string.", 
+    .src[..=.span.offset() - 1].lines().count())]
+#[diagnostic(code("65"))]
 pub struct UnterminatedString {
     #[source_code]
     src: String,

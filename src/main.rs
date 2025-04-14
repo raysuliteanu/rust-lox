@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Report, WrapErr};
-use rust_lox::parser::ParserResult;
-use rust_lox::token::{Lexer, Token};
+use rust_lox::token::Lexer;
 use rust_lox::{interpret, parser};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -25,69 +24,38 @@ fn main() -> Result<ExitCode, miette::Error> {
 
     let lox = Lox::parse();
 
-    let exit_code = match &lox.commands {
+    let result = match &lox.commands {
         LoxCommands::Tokenize { filename } => {
             let source = get_source(filename)?;
-
             let lexer = Lexer::new(filename.display().to_string(), source.as_str());
-
-            lexer.tokenize()?
+            lexer.tokenize()
         }
         LoxCommands::Parse { filename } => {
             let source = get_source(filename)?;
-
             let lexer = Lexer::new(filename.display().to_string(), source.as_str());
             let mut parser = parser::Parser::new(lexer.peekable());
-            parse(&mut parser)?
+            parser.parse()
         }
         LoxCommands::Evaluate { filename } => {
             let source = get_source(filename)?;
+            let interpreter = interpret::Interpreter::new(&source, filename);
+            interpreter.evaluate()
+        }
+    };
 
-            let lexer = Lexer::new(filename.display().to_string(), source.as_str());
-            let mut parser = parser::Parser::new(lexer.peekable());
-
-            let ast = parser.parse()?;
-            let interpreter = interpret::Interpreter::new(ast);
-            let value = interpreter.evaluate();
-            match value {
-                Ok(t) => {
-                    println!("{t}");
-                    0u8
-                }
-                // TODO: using the miette:Diagnostic 'code' field might work, but should probably
-                // create a type, wrather than duplicating the codes all over the place in the
-                // miette!() macro
-                Err(e) => {
-                    eprintln!("{e}");
-                    if let Some(code) = e.code() {
-                        code.to_string().parse::<u8>().into_diagnostic()?
-                    } else {
-                        1
-                    }
-                }
-            }
+    let exit_code = match result {
+        Ok(_) => 0u8,
+        Err(e) => {
+            eprintln!("{e}");
+            e.code()
+                .unwrap_or(Box::new("1"))
+                .to_string()
+                .parse::<u8>()
+                .into_diagnostic()?
         }
     };
 
     Ok(ExitCode::from(exit_code))
-}
-
-pub fn parse<T: Iterator<Item = ParserResult<Token>>>(
-    parser: &mut parser::Parser<T>,
-) -> Result<u8, miette::Error> {
-    let mut exit_code = 0u8;
-    let ast = parser.parse();
-    match ast {
-        Ok(t) => {
-            println!("{t}");
-        }
-        Err(e) => {
-            exit_code = 65;
-            eprintln!("{e}");
-        }
-    }
-
-    Ok(exit_code)
 }
 
 fn get_source(filename: &PathBuf) -> Result<String, Report> {

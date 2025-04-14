@@ -1,15 +1,26 @@
-use crate::parser::Ast;
+use crate::parser;
 use crate::parser::Expr;
 use crate::parser::Node;
+use crate::token::Lexer;
 use crate::token::{KeywordKind, LiteralKind, Token};
-use miette::miette;
 use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 
 type InterpreterResult = Result<InterpreterValue, miette::Error>;
 
-pub struct Interpreter {
-    ast: Ast,
+macro_rules! runtime_error {
+    ($msg:literal, $line:literal) => {
+        miette::miette!(code = "70", "{}", format!("{}\n[line {}]", $msg, $line))
+    };
+    ($msg:expr, $line:literal) => {
+        miette::miette!(code = "70", "{}", format!("{}\n[line {}]", $msg, $line))
+    };
+}
+
+pub struct Interpreter<'i> {
+    src: &'i str,
+    file: &'i PathBuf,
 }
 
 #[derive(Debug)]
@@ -31,13 +42,19 @@ impl Display for InterpreterValue {
     }
 }
 
-impl Interpreter {
-    pub fn new(ast: Ast) -> Self {
-        Self { ast }
+impl<'i> Interpreter<'i> {
+    pub fn new(src: &'i str, file: &'i PathBuf) -> Self {
+        Self { src, file }
     }
 
-    pub fn evaluate(&self) -> InterpreterResult {
-        self.evaluate_all(&self.ast.tree)
+    pub fn evaluate(&self) -> Result<(), miette::Error> {
+        let lexer = Lexer::new(self.file.display().to_string(), self.src);
+        let mut parser = parser::Parser::new(lexer.peekable());
+        let ast = parser.ast()?;
+
+        let result = self.evaluate_all(&ast.tree)?;
+        println!("{result}");
+        Ok(())
     }
 
     pub fn evaluate_all(&self, node: &Node) -> InterpreterResult {
@@ -71,10 +88,7 @@ impl Interpreter {
                     LiteralKind::Plus => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l + f_r)),
-                            _ => Err(miette!(
-                                code = "70",
-                                "Operands must be two numbers or two strings."
-                            ))?,
+                            _ => Err(runtime_error!("Operands must be numbers", 1))?,
                         },
                         InterpreterValue::String(ref s_l) => match right {
                             InterpreterValue::String(s_r) => {
@@ -82,42 +96,30 @@ impl Interpreter {
                                 s.push_str(s_r.as_str());
                                 Ok(InterpreterValue::String(s))
                             }
-                            _ => Err(miette!(
-                                code = "70",
-                                "Operands must be two numbers or two strings."
-                            ))?,
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette!(
-                            code = "70",
-                            "Operands must be two numbers or two strings."
-                        ))?,
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     LiteralKind::Minus => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l - f_r)),
-                            _ => Err(miette!(
-                                code = "70",
-                                "Operands must be two numbers or two strings."
-                            ))?,
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette!(
-                            code = "70",
-                            "Operands must be two numbers or two strings."
-                        ))?,
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     LiteralKind::Star => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l * f_r)),
-                            _ => Err(miette!(code = "70", "Operands must be numbers."))?,
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette!(code = "70", "Operands must be numbers."))?,
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     LiteralKind::Slash => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l / f_r)),
-                            _ => Err(miette!(code = "70", "Operands must be numbers."))?,
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette!(code = "70", "Operands must be numbers."))?,
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     LiteralKind::EqEq => match left {
                         InterpreterValue::Float(f_l) => match right {
@@ -162,46 +164,30 @@ impl Interpreter {
                     LiteralKind::Less => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l < f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't compare {left} to {right}"
-                            )),
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette::miette!(
-                            "type mismatch - can't compare {left} to {right}"
-                        )),
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     LiteralKind::LessEq => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l <= f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't compare {left} to {right}"
-                            )),
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette::miette!(
-                            "type mismatch - can't compare {left} to {right}"
-                        )),
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     LiteralKind::Greater => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l > f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't compare {left} to {right}"
-                            )),
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette::miette!(
-                            "type mismatch - can't compare {left} to {right}"
-                        )),
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     LiteralKind::GreaterEq => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l >= f_r)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't compare {left} to {right}"
-                            )),
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette::miette!(
-                            "type mismatch - can't compare {left} to {right}"
-                        )),
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     _ => todo!("{literal}"),
                 },
@@ -209,23 +195,16 @@ impl Interpreter {
                     KeywordKind::And => match left {
                         InterpreterValue::Bool(l_b) => match right {
                             InterpreterValue::Bool(r_b) => Ok(InterpreterValue::Bool(l_b && r_b)),
-                            _ => {
-                                // todo: to take advantage of miette would be nice to have row/col info here
-                                Err(miette::miette!(
-                                    "type mismatch - can't 'and' {left} and {right}"
-                                ))
-                            }
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette!("invalid operation {op} for {left}"))?,
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     KeywordKind::Or => match left {
                         InterpreterValue::Bool(l_b) => match right {
                             InterpreterValue::Bool(r_b) => Ok(InterpreterValue::Bool(l_b || r_b)),
-                            _ => Err(miette::miette!(
-                                "type mismatch - can't 'or' {left} and {right}"
-                            )),
+                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
                         },
-                        _ => Err(miette!("invalid operation {op} for {left} and {right}"))?,
+                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
                     },
                     _ => todo!("{keyword}"),
                 },
@@ -243,7 +222,7 @@ impl Interpreter {
                     if t.borrow() == &Token::Literal(LiteralKind::Bang) {
                         Ok(InterpreterValue::Bool(!v))
                     } else {
-                        Err(miette!(code = "70", "invalid operation {op} for {val}"))?
+                        Ok(InterpreterValue::Bool(false))
                     }
                 }
                 InterpreterValue::Float(v) => {
@@ -252,19 +231,19 @@ impl Interpreter {
                     } else if t.borrow() == &Token::Literal(LiteralKind::Bang) {
                         Ok(InterpreterValue::Bool(false))
                     } else {
-                        Err(miette!(code = "70", "Operand must be a number."))?
+                        Err(runtime_error!("Operand must be a number.", 1))?
                     }
                 }
                 InterpreterValue::Nil => {
                     if t.borrow() == &Token::Literal(LiteralKind::Bang) {
                         Ok(InterpreterValue::Bool(true))
                     } else {
-                        Err(miette!(code = "70", "invalid operation {op} for {val}"))?
+                        Err(runtime_error!("Operand must be a number.", 1))?
                     }
                 }
-                _ => Err(miette!(code = "70", "Operand must be a number."))?,
+                _ => Err(runtime_error!("Operand must be a number.", 1))?,
             },
-            _ => Err(miette!(code = "70", "invalid operation {op} for {val}"))?,
+            _ => Err(runtime_error!("invalid operation {op} for {val}", 1))?,
         }
     }
 }
