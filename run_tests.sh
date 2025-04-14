@@ -13,6 +13,8 @@ TOKENIZE_TEST_FILES=$(find "$(pwd)" -type f -name "tokenize_test*.lox" | sort)
 PARSE_TEST_FILES=$(find "$(pwd)" -type f -name "parse_test*.lox" | sort)
 EVALUATE_TEST_FILES=$(find "$(pwd)" -type f -name "evaluate_test*.lox" | sort)
 
+FAILED_TESTS=""
+
 RESULT=0
 
 usage() {
@@ -34,19 +36,16 @@ run_test() {
 	expected="$dirname/${base}_expected.out"
 	if [ -e "$expected" ]; then
 		out="$dirname/$base.out"
-		if ! $CARGO_RUN "$cmd" "$file" >"$out" 2>&1; then
-			echo "${RED}Test failed:${RESET} $base"
-			echo "See file $out"
+		# TODO: need to account for non-zero exit codes as expected results
+		$CARGO_RUN "$cmd" "$file" >"$out" 2>&1
+		if ! delta "$dirname/$base.out" "$expected"; then
+			echo "${RED}Test ${base}:${RESET} output does not match expected output"
+			echo "See file: $out"
+			FAILED_TESTS="${FAILED_TESTS}$base "
 			RESULT=1
 		else
-			if ! delta "$dirname/$base.out" "$expected"; then
-				echo "${RED}Test ${base}:${RESET} output does not match expected output"
-				echo "See file: $out"
-				RESULT=1
-			else
-				echo "${GREEN}Test passed:${RESET} $base"
-				rm "$out"
-			fi
+			echo "${GREEN}Test passed:${RESET} $base"
+			rm "$out"
 		fi
 	else
 		echo "${RED}Missing output comparison file:${RESET} $expected"
@@ -113,7 +112,10 @@ esac
 if [ "$RESULT" -eq 0 ]; then
 	echo "${GREEN}All tests passed!${RESET}"
 else
-	echo "${RED}Some tests failed.${RESET}"
+	echo "${RED}Some tests failed:${RESET}"
+	for t in $FAILED_TESTS; do
+		echo "  ${RED}$t${RESET}"
+	done
 fi
 
 exit $RESULT
