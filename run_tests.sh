@@ -41,7 +41,7 @@ run_test() {
 		if ! delta "$dirname/$base.out" "$expected"; then
 			echo "${RED}Test ${base}:${RESET} output does not match expected output"
 			echo "See file: $out"
-			FAILED_TESTS="${FAILED_TESTS}$base "
+			FAILED_TESTS+="$base "
 			RESULT=1
 		else
 			echo "${GREEN}Test passed:${RESET} $base"
