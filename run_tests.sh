@@ -38,6 +38,7 @@ run_test() {
 		out="$dirname/$base.out"
 		# TODO: need to account for non-zero exit codes as expected results
 		$CARGO_RUN "$cmd" "$file" >"$out" 2>&1
+		echo "rc: $?" >>"$dirname/$base.out"
 		if ! delta "$dirname/$base.out" "$expected"; then
 			echo "${RED}Test ${base}:${RESET} output does not match expected output"
 			echo "See file: $out"

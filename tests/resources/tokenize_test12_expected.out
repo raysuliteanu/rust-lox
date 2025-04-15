@@ -6,3 +6,4 @@ COMMA , null
 STAR * null
 PLUS + null
 EOF  null
+rc: 0

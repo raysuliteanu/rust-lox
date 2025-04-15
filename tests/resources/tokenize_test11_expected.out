@@ -11,3 +11,4 @@ COMMA , null
 SEMICOLON ; null
 SEMICOLON ; null
 EOF  null
+rc: 0

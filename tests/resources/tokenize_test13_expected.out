@@ -8,3 +8,4 @@ COMMA , null
 RIGHT_BRACE } null
 RIGHT_PAREN ) null
 EOF  null
+rc: 0

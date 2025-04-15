@@ -6,3 +6,4 @@ RIGHT_BRACE } null
 LEFT_BRACE { null
 LEFT_PAREN ( null
 EOF  null
+rc: 0
