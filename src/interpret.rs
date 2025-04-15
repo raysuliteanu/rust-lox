@@ -18,11 +18,6 @@ macro_rules! runtime_error {
     };
 }
 
-pub struct Interpreter<'i> {
-    src: &'i str,
-    file: &'i PathBuf,
-}
-
 #[derive(Debug)]
 pub enum InterpreterValue {
     Bool(bool),
@@ -42,19 +37,44 @@ impl Display for InterpreterValue {
     }
 }
 
+#[derive(Default)]
+pub struct Interpreter<'i> {
+    src: Option<String>,
+    file: Option<&'i PathBuf>,
+}
+
 impl<'i> Interpreter<'i> {
-    pub fn new(src: &'i str, file: &'i PathBuf) -> Self {
-        Self { src, file }
+    pub fn new(file: &'i PathBuf) -> Self {
+        Self {
+            src: None,
+            file: Some(file),
+        }
     }
 
-    pub fn evaluate(&self) -> Result<(), miette::Error> {
-        let lexer = Lexer::new(self.file.display().to_string(), self.src);
+    fn filename(&self) -> String {
+        self.file
+            .as_ref()
+            .map(|f| f.display().to_string())
+            .unwrap_or_else(|| "stdin".to_string())
+    }
+
+    fn source(&self) -> &str {
+        self.src.as_ref().map(|s| s.as_ref()).unwrap()
+    }
+
+    pub fn interpret(&mut self, source: String) -> Result<(), miette::Error> {
+        self.src = Some(source);
+        let result = self.evaluate()?;
+        println!("{result}");
+        Ok(())
+    }
+
+    fn evaluate(&self) -> InterpreterResult {
+        let lexer = Lexer::new(self.filename(), self.source());
         let mut parser = parser::Parser::new(lexer.peekable());
         let ast = parser.ast()?;
 
-        let result = self.evaluate_all(&ast.tree)?;
-        println!("{result}");
-        Ok(())
+        self.evaluate_all(&ast.tree)
     }
 
     pub fn evaluate_all(&self, node: &Node) -> InterpreterResult {
@@ -96,30 +116,30 @@ impl<'i> Interpreter<'i> {
                                 s.push_str(s_r.as_str());
                                 Ok(InterpreterValue::String(s))
                             }
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     LiteralKind::Minus => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l - f_r)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     LiteralKind::Star => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l * f_r)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     LiteralKind::Slash => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Float(f_l / f_r)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     LiteralKind::EqEq => match left {
                         InterpreterValue::Float(f_l) => match right {
@@ -164,30 +184,30 @@ impl<'i> Interpreter<'i> {
                     LiteralKind::Less => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l < f_r)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     LiteralKind::LessEq => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l <= f_r)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     LiteralKind::Greater => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l > f_r)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     LiteralKind::GreaterEq => match left {
                         InterpreterValue::Float(f_l) => match right {
                             InterpreterValue::Float(f_r) => Ok(InterpreterValue::Bool(f_l >= f_r)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     _ => todo!("{literal}"),
                 },
@@ -195,16 +215,16 @@ impl<'i> Interpreter<'i> {
                     KeywordKind::And => match left {
                         InterpreterValue::Bool(l_b) => match right {
                             InterpreterValue::Bool(r_b) => Ok(InterpreterValue::Bool(l_b && r_b)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     KeywordKind::Or => match left {
                         InterpreterValue::Bool(l_b) => match right {
                             InterpreterValue::Bool(r_b) => Ok(InterpreterValue::Bool(l_b || r_b)),
-                            _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                            _ => Err(runtime_error!(self.source(), 1))?,
                         },
-                        _ => Err(runtime_error!(self.src.to_string(), 1))?,
+                        _ => Err(runtime_error!(self.source(), 1))?,
                     },
                     _ => todo!("{keyword}"),
                 },

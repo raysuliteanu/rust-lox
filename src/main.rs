@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Report, WrapErr};
-use rust_lox::token::Lexer;
-use rust_lox::{interpret, parser};
+use rust_lox::{interpret, parser, repl, token};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::{fs, str};
@@ -9,7 +8,7 @@ use std::{fs, str};
 #[derive(Parser)]
 struct Lox {
     #[command(subcommand)]
-    commands: LoxCommands,
+    commands: Option<LoxCommands>,
 }
 
 #[derive(Subcommand)]
@@ -25,22 +24,25 @@ fn main() -> Result<ExitCode, miette::Error> {
     let lox = Lox::parse();
 
     let result = match &lox.commands {
-        LoxCommands::Tokenize { filename } => {
-            let source = get_source(filename)?;
-            let lexer = Lexer::new(filename.display().to_string(), source.as_str());
-            lexer.tokenize()
-        }
-        LoxCommands::Parse { filename } => {
-            let source = get_source(filename)?;
-            let lexer = Lexer::new(filename.display().to_string(), source.as_str());
-            let mut parser = parser::Parser::new(lexer.peekable());
-            parser.parse()
-        }
-        LoxCommands::Evaluate { filename } => {
-            let source = get_source(filename)?;
-            let interpreter = interpret::Interpreter::new(&source, filename);
-            interpreter.evaluate()
-        }
+        Some(command) => match command {
+            LoxCommands::Tokenize { filename } => {
+                let source = get_source(filename)?;
+                let lexer = token::Lexer::new(filename.display().to_string(), source.as_str());
+                lexer.tokenize()
+            }
+            LoxCommands::Parse { filename } => {
+                let source = get_source(filename)?;
+                let lexer = token::Lexer::new(filename.display().to_string(), source.as_str());
+                let mut parser = parser::Parser::new(lexer.peekable());
+                parser.parse()
+            }
+            LoxCommands::Evaluate { filename } => {
+                let source = get_source(filename)?;
+                let mut interpreter = interpret::Interpreter::new(filename);
+                interpreter.interpret(source)
+            }
+        },
+        None => repl::Repl::new().run(),
     };
 
     let exit_code = match result {

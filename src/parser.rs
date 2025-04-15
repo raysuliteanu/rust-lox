@@ -215,7 +215,7 @@ where
                     }
                     _ => {
                         trace!("unexpected token '{t}'");
-                        Err(UnexpectedEof.into())
+                        Err(UnexpectedToken { token: t }.into())
                     }
                 },
                 Err(e) => Err(e),
@@ -293,6 +293,12 @@ pub struct UnexpectedEof;
 pub struct MissingToken {
     expected: Token,
     actual: Token,
+}
+
+#[derive(Error, Debug, Diagnostic)]
+#[error("Unexpected token {token}")]
+pub struct UnexpectedToken {
+    token: Token,
 }
 
 enum _Stmt {}
