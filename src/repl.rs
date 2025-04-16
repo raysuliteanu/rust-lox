@@ -31,7 +31,7 @@ impl<'r> Repl<'r> {
                 break;
             }
             let _ = self.interpreter.interpret(source).map_err(|e| {
-                eprintln!("{e}");
+                eprintln!("{:?}", e);
             });
             expr.clear();
         }

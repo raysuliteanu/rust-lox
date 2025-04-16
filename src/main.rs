@@ -48,7 +48,7 @@ fn main() -> Result<ExitCode, miette::Error> {
     let exit_code = match result {
         Ok(_) => 0u8,
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("{:?}", e);
             e.code()
                 .unwrap_or(Box::new("1"))
                 .to_string()

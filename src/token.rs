@@ -27,7 +27,7 @@ impl<'le> Lexer<'le> {
                     println!("{t}");
                 }
                 Err(e) => {
-                    eprintln!("{e}");
+                    eprintln!("{:?}", e);
                     e.code()
                         .unwrap_or(Box::new("1"))
                         .to_string()
