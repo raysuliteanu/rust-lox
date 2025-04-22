@@ -40,6 +40,7 @@ where
         println!("{ast}");
         Ok(())
     }
+
     pub fn ast(&mut self) -> Result<Ast, miette::Error> {
         Ok(Ast {
             tree: self.expression()?,

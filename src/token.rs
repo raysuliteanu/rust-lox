@@ -3,6 +3,30 @@ use std::{fmt::Display, str::Chars};
 use strum::{EnumMessage, IntoStaticStr};
 use thiserror::Error;
 
+macro_rules! keyword {
+    ($k:ident) => {
+        match ($k) {
+            "and" => Some(Token::Keyword(KeywordKind::And)),
+            "class" => Some(Token::Keyword(KeywordKind::Class)),
+            "else" => Some(Token::Keyword(KeywordKind::Else)),
+            "false" => Some(Token::Keyword(KeywordKind::False)),
+            "for" => Some(Token::Keyword(KeywordKind::For)),
+            "fun" => Some(Token::Keyword(KeywordKind::Fun)),
+            "if" => Some(Token::Keyword(KeywordKind::If)),
+            "nil" => Some(Token::Keyword(KeywordKind::Nil)),
+            "or" => Some(Token::Keyword(KeywordKind::Or)),
+            "print" => Some(Token::Keyword(KeywordKind::Print)),
+            "return" => Some(Token::Keyword(KeywordKind::Return)),
+            "super" => Some(Token::Keyword(KeywordKind::Super)),
+            "this" => Some(Token::Keyword(KeywordKind::This)),
+            "true" => Some(Token::Keyword(KeywordKind::True)),
+            "var" => Some(Token::Keyword(KeywordKind::Var)),
+            "while" => Some(Token::Keyword(KeywordKind::While)),
+        _ => None,
+        }
+     };
+}
+
 pub struct Lexer<'le> {
     _source_file: String,
     source: &'le str,
@@ -28,11 +52,6 @@ impl<'le> Lexer<'le> {
                 }
                 Err(e) => {
                     eprintln!("{:?}", e);
-                    e.code()
-                        .unwrap_or(Box::new("1"))
-                        .to_string()
-                        .parse::<u8>()
-                        .unwrap(); // with earlier default to "1" parse should never fail
                 }
             }
         }
@@ -52,12 +71,10 @@ impl<'le> Lexer<'le> {
     }
 
     fn peek(&mut self) -> Option<char> {
-        // self.chars.nth(self.offset)
         self.source.chars().nth(self.offset)
     }
 
     fn advance(&mut self) -> Option<char> {
-        // let next = self.chars.nth(self.offset)?;
         let next = self.source.chars().nth(self.offset)?;
         self.offset += 1;
 
@@ -73,29 +90,13 @@ impl<'le> Lexer<'le> {
                 None => &self.source[start..],
             };
 
-        let token = match word {
-            "and" => Token::Keyword(KeywordKind::And),
-            "class" => Token::Keyword(KeywordKind::Class),
-            "else" => Token::Keyword(KeywordKind::Else),
-            "false" => Token::Keyword(KeywordKind::False),
-            "for" => Token::Keyword(KeywordKind::For),
-            "fun" => Token::Keyword(KeywordKind::Fun),
-            "if" => Token::Keyword(KeywordKind::If),
-            "nil" => Token::Keyword(KeywordKind::Nil),
-            "or" => Token::Keyword(KeywordKind::Or),
-            "print" => Token::Keyword(KeywordKind::Print),
-            "return" => Token::Keyword(KeywordKind::Return),
-            "super" => Token::Keyword(KeywordKind::Super),
-            "this" => Token::Keyword(KeywordKind::This),
-            "true" => Token::Keyword(KeywordKind::True),
-            "var" => Token::Keyword(KeywordKind::Var),
-            "while" => Token::Keyword(KeywordKind::While),
-            _ => Token::Identifier {
+        let token = keyword!(word).unwrap_or(
+            Token::Identifier {
                 value: String::from(&self.source[start..start + word.len()]),
-            },
-        };
+            }
+        );
 
-        self.offset += word.len() - 1; // -1 because we added one at the start
+        self.offset += word.len() - 1;
 
         Some(Ok(token))
     }
