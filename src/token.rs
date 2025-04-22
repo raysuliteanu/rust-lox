@@ -1,9 +1,24 @@
 use miette::{Diagnostic, SourceSpan};
-use std::{fmt::Display, str::Chars};
+use std::fmt::Display;
 use strum::{EnumMessage, IntoStaticStr};
 use thiserror::Error;
 
-macro_rules! keyword {
+macro_rules! number_token {
+    ($l:ident, $v:ident) => {
+        Token::Number { raw: String::from($l), value: $v, }
+    };
+    ($l:expr, $v:ident) => {
+        Token::Number { raw: String::from($l), value: $v, }
+    };
+    ($l:expr, $v:expr) => {
+        Token::Number { raw: String::from($l), value: $v, }
+    };
+    ($l:ident, $v:expr) => {
+        Token::Number { raw: String::from($l), value: $v, }
+    };
+}
+
+macro_rules! keyword_token {
     ($k:ident) => {
         match ($k) {
             "and" => Some(Token::Keyword(KeywordKind::And)),
@@ -31,7 +46,6 @@ pub struct Lexer<'le> {
     _source_file: String,
     source: &'le str,
     offset: usize,
-    _chars: Chars<'le>,
 }
 
 impl<'le> Lexer<'le> {
@@ -40,7 +54,6 @@ impl<'le> Lexer<'le> {
             _source_file: source_file,
             source,
             offset: 0,
-            _chars: source.chars(),
         }
     }
 
@@ -90,7 +103,7 @@ impl<'le> Lexer<'le> {
                 None => &self.source[start..],
             };
 
-        let token = keyword!(word).unwrap_or(
+        let token = keyword_token!(word).unwrap_or(
             Token::Identifier {
                 value: String::from(&self.source[start..start + word.len()]),
             }
@@ -104,11 +117,21 @@ impl<'le> Lexer<'le> {
     fn tokenize_number(&mut self) -> Option<miette::Result<Token>> {
         let start = self.offset - 1;
 
+        // Find the index in the source of the first char that's *not* 0-9 or .
         let non_digit_idx = self.source[start..]
             .find(|c| !matches!(c, '.' | '0'..='9'))
             .unwrap_or(self.source.len() - start);
 
         let mut num_literal = &self.source[start..start + non_digit_idx];
+
+        // There are 3 possibilities now. The number can be one of
+        // 1. just digits e.g. 123
+        // 2. digits plus a trailing . e.g. 123.
+        // 3. digits before and after a . e.g. 123.45
+        // So doing the splitn(3, '.') will result in 
+        // 1. Some, None, None => the _ case 
+        // 2. Some, Some, None => the 123. case
+        // 3. Some, Some, Some => the 123.45 case
         let mut split = num_literal.splitn(3, '.');
         match (split.next(), split.next(), split.next()) {
             (Some(first), Some(second), Some(_)) => {
@@ -135,10 +158,7 @@ impl<'le> Lexer<'le> {
 
         self.offset = start + num_literal.len();
 
-        Some(Ok(Token::Number {
-            raw: String::from(num_literal),
-            value,
-        }))
+        Some(Ok(number_token!(num_literal, value)))
     }
 
     fn tokenize_op_or_opequal(
@@ -483,20 +503,11 @@ mod test {
             .collect::<Vec<_>>();
 
         let expected = vec![
-            Token::Number {
-                raw: "1".to_string(),
-                value: 1.0,
-            },
+            number_token!("1".to_string(), 1.0),
             Token::Literal(LiteralKind::Plus),
-            Token::Number {
-                raw: "2".to_string(),
-                value: 2.0,
-            },
+            number_token!("2".to_string(), 2.0),
             Token::Literal(LiteralKind::Minus),
-            Token::Number {
-                raw: "3".to_string(),
-                value: 3.0,
-            },
+            number_token!("3".to_string(), 3.0),
         ];
 
         check(actual, expected);
@@ -513,28 +524,13 @@ mod test {
             .collect::<Vec<_>>();
 
         let expected = vec![
-            Token::Number {
-                raw: "123".to_string(),
-                value: 123.0,
-            },
-            Token::Number {
-                raw: "123.456".to_string(),
-                value: 123.456,
-            },
+            number_token!("123".to_string(), 123.0),
+            number_token!("123.456".to_string(), 123.456),
             Token::Literal(LiteralKind::Dot),
-            Token::Number {
-                raw: "456".to_string(),
-                value: 456.0,
-            },
-            Token::Number {
-                raw: "123".to_string(),
-                value: 123.0,
-            },
+            number_token!("456".to_string(), 456.0),
+            number_token!("123".to_string(), 123.0),
             Token::Literal(LiteralKind::Dot),
-            Token::Number {
-                raw: "42.42".to_string(),
-                value: 42.42,
-            },
+            number_token!("42.42".to_string(), 42.42),
         ];
 
         check(actual, expected);
