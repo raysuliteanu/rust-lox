@@ -1,4 +1,5 @@
 use miette::{Diagnostic, SourceSpan};
+use miette::Result as MietteResult;
 use std::fmt::Display;
 use strum::{EnumMessage, IntoStaticStr};
 use thiserror::Error;
@@ -42,16 +43,58 @@ macro_rules! keyword_token {
      };
 }
 
+macro_rules! literal_token {
+    ($k:literal) => {
+        match $k {
+            '/' => Token::Literal(LiteralKind::Slash),
+            '(' => Token::Literal(LiteralKind::LeftParen),
+            ')' => Token::Literal(LiteralKind::RightParen),
+            '{' => Token::Literal(LiteralKind::LeftBrace),
+            '}' => Token::Literal(LiteralKind::RightBrace),
+            ';' => Token::Literal(LiteralKind::SemiColon),
+            ',' => Token::Literal(LiteralKind::Comma),
+            '+' => Token::Literal(LiteralKind::Plus),
+            '-' => Token::Literal(LiteralKind::Minus),
+            '*' => Token::Literal(LiteralKind::Star),
+            '=' => Token::Literal(LiteralKind::Eq),
+            '<' => Token::Literal(LiteralKind::Less),
+            '>' => Token::Literal(LiteralKind::Greater),
+            '.' => Token::Literal(LiteralKind::Dot),
+            '!' => Token::Literal(LiteralKind::Bang),
+            _ => panic!("must be single character literal"),
+        }
+    };
+}
+
+// TODO: can't use str in const or static, so figure out the macros to deal
+const TOKEN_SLASH: Token = literal_token!('/');
+const TOKEN_LEFT_PAREN: Token = literal_token!('(');
+const TOKEN_RIGHT_PAREN: Token = literal_token!(')');
+const TOKEN_LEFT_BRACE: Token = literal_token!('{');
+const TOKEN_RIGHT_BRACE: Token = literal_token!('}');
+const TOKEN_SEMICOLON: Token = literal_token!(';');
+const TOKEN_COMMA: Token = literal_token!(',');
+const TOKEN_PLUS: Token = literal_token!('+');
+const TOKEN_MINUS: Token = literal_token!('-');
+const TOKEN_STAR: Token = literal_token!('*');
+const TOKEN_DOT: Token = literal_token!('.');
+const TOKEN_EQ: Token = literal_token!('=');
+const TOKEN_EQ_EQ: Token = Token::Literal(LiteralKind::EqEq);
+const TOKEN_LESS: Token = literal_token!('<');
+const TOKEN_LESS_EQ: Token = Token::Literal(LiteralKind::LessEq);
+const TOKEN_GREATER: Token = literal_token!('>');
+const TOKEN_GREATER_EQ: Token = Token::Literal(LiteralKind::GreaterEq);
+const TOKEN_BANG: Token = literal_token!('!');
+const TOKEN_BANG_EQ: Token = Token::Literal(LiteralKind::BangEq);
+
 pub struct Lexer<'le> {
-    _source_file: String,
     source: &'le str,
     offset: usize,
 }
 
 impl<'le> Lexer<'le> {
-    pub fn new(source_file: String, source: &'le str) -> Self {
+    pub fn new(source: &'le str) -> Self {
         Self {
-            _source_file: source_file,
             source,
             offset: 0,
         }
@@ -74,11 +117,6 @@ impl<'le> Lexer<'le> {
         Ok(())
     }
 
-    #[cfg(test)]
-    pub fn new_from_string(source: &'le str) -> Self {
-        Self::new("test".to_string(), source)
-    }
-
     fn offset(&self) -> usize {
         self.offset
     }
@@ -94,7 +132,7 @@ impl<'le> Lexer<'le> {
         Some(next)
     }
 
-    fn tokenize_keyword_or_identifier(&mut self) -> Option<miette::Result<Token>> {
+    fn tokenize_keyword_or_identifier(&mut self) -> Option<MietteResult<Token>> {
         let start = self.offset - 1;
         // split_once will "remove" the space if found ... neither part contains the space
         let word =
@@ -114,7 +152,7 @@ impl<'le> Lexer<'le> {
         Some(Ok(token))
     }
 
-    fn tokenize_number(&mut self) -> Option<miette::Result<Token>> {
+    fn tokenize_number(&mut self) -> Option<MietteResult<Token>> {
         let start = self.offset - 1;
 
         // Find the index in the source of the first char that's *not* 0-9 or .
@@ -161,21 +199,17 @@ impl<'le> Lexer<'le> {
         Some(Ok(number_token!(num_literal, value)))
     }
 
-    fn tokenize_op_or_opequal(
-        &mut self,
-        this: LiteralKind,
-        that: LiteralKind,
-    ) -> Option<miette::Result<Token>> {
+    fn tokenize_op_or_opequal(&mut self, op: Token, op_eq: Token) -> Option<MietteResult<Token>> {
         self.peek()
             .is_some_and(|c| c == '=')
             .then(|| {
                 assert_eq!(self.advance(), Some('=')); // eat the '='
-                Ok(Token::Literal(that))
+                Ok(op_eq)
             })
-            .or(Some(Ok(Token::Literal(this))))
+            .or(Some(Ok(op)))
     }
 
-    fn tokenize_string_literal(&mut self) -> Option<miette::Result<Token>> {
+    fn tokenize_string_literal(&mut self) -> Option<MietteResult<Token>> {
         let offset = self.offset();
         if let Some(length) = self.source[offset..].find('"') {
             self.offset += length + 1;
@@ -185,7 +219,7 @@ impl<'le> Lexer<'le> {
         } else {
             let e = UnterminatedString {
                 src: self.source.to_string(),
-                span: SourceSpan::from(self.offset),
+                span: SourceSpan::from(self.offset().saturating_sub(1)),
             };
             self.offset = self.source.len();
             Some(Err(e.into()))
@@ -202,16 +236,16 @@ impl Iterator for Lexer<'_> {
             let t = match cur_char {
                 Some(c) => match c {
                     c if c.is_whitespace() => continue,
-                    '(' => Some(Ok(Token::Literal(LiteralKind::LeftParen))),
-                    ')' => Some(Ok(Token::Literal(LiteralKind::RightParen))),
-                    '{' => Some(Ok(Token::Literal(LiteralKind::LeftBrace))),
-                    '}' => Some(Ok(Token::Literal(LiteralKind::RightBrace))),
-                    ',' => Some(Ok(Token::Literal(LiteralKind::Comma))),
-                    '.' => Some(Ok(Token::Literal(LiteralKind::Dot))),
-                    '+' => Some(Ok(Token::Literal(LiteralKind::Plus))),
-                    '-' => Some(Ok(Token::Literal(LiteralKind::Minus))),
-                    ';' => Some(Ok(Token::Literal(LiteralKind::SemiColon))),
-                    '*' => Some(Ok(Token::Literal(LiteralKind::Star))),
+                    '(' => Some(Ok(TOKEN_LEFT_PAREN)),
+                    ')' => Some(Ok(TOKEN_RIGHT_PAREN)),
+                    '{' => Some(Ok(TOKEN_LEFT_BRACE)),
+                    '}' => Some(Ok(TOKEN_RIGHT_BRACE)),
+                    ',' => Some(Ok(TOKEN_COMMA)),
+                    '.' => Some(Ok(TOKEN_DOT)),
+                    '+' => Some(Ok(TOKEN_PLUS)),
+                    '-' => Some(Ok(TOKEN_MINUS)),
+                    ';' => Some(Ok(TOKEN_SEMICOLON)),
+                    '*' => Some(Ok(TOKEN_STAR)),
                     '"' => self.tokenize_string_literal(),
                     '/' => {
                         if self.peek() == Some('/') {
@@ -220,24 +254,20 @@ impl Iterator for Lexer<'_> {
                             }
                             continue;
                         } else {
-                            Some(Ok(Token::Literal(LiteralKind::Slash)))
+                            Some(Ok(TOKEN_SLASH))
                         }
                     }
-                    '>' => {
-                        self.tokenize_op_or_opequal(LiteralKind::Greater, LiteralKind::GreaterEq)
-                    }
-                    '<' => self.tokenize_op_or_opequal(LiteralKind::Less, LiteralKind::LessEq),
-                    '=' => self.tokenize_op_or_opequal(LiteralKind::Eq, LiteralKind::EqEq),
-                    '!' => self.tokenize_op_or_opequal(LiteralKind::Bang, LiteralKind::BangEq),
+                    '>' => self.tokenize_op_or_opequal(TOKEN_GREATER, TOKEN_GREATER_EQ),
+                    '<' => self.tokenize_op_or_opequal(TOKEN_LESS, TOKEN_LESS_EQ),
+                    '=' => self.tokenize_op_or_opequal(TOKEN_EQ, TOKEN_EQ_EQ),
+                    '!' => self.tokenize_op_or_opequal(TOKEN_BANG, TOKEN_BANG_EQ),
                     c if c.is_ascii_digit() => self.tokenize_number(),
                     c if c.is_alphanumeric() || c == '_' => self.tokenize_keyword_or_identifier(),
                     _ => {
-                        let error = InvalidToken {
+                        return Some(Err(InvalidToken {
                             src: self.source.to_string(),
-                            span: SourceSpan::from(self.offset()),
-                        };
-
-                        return Some(Err(error.into()));
+                            span: SourceSpan::from(self.offset().saturating_sub(1)),
+                        }.into()));
                     }
                 },
                 None => None,
@@ -250,8 +280,8 @@ impl Iterator for Lexer<'_> {
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("[line {}] Error: Unexpected character: {}", 
-    .src[..=.span.offset() - 1].lines().count(), 
-    .src.chars().nth(.span.offset() - 1).unwrap())]
+    .src[..=.span.offset()].lines().count(), 
+    .src.chars().nth(.span.offset()).unwrap())]
 #[diagnostic(code("65"))]
 pub struct InvalidToken {
     #[source_code]
@@ -262,12 +292,12 @@ pub struct InvalidToken {
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("[line {}] Error: Unterminated string.", 
-    .src[..=.span.offset() - 1].lines().count())]
+    .src[..=.span.offset()].lines().count())]
 #[diagnostic(code("65"))]
 pub struct UnterminatedString {
     #[source_code]
     src: String,
-    #[label("here")]
+    #[label("starting here")]
     span: SourceSpan,
 }
 
@@ -385,7 +415,7 @@ mod test {
 
     #[test]
     fn punctuation() {
-        let scanner = Lexer::new_from_string("/(){};,+-*===<=>=!=<>.!");
+        let scanner = Lexer::new("/(){};,+-*===<=>=!=<>.!");
 
         let actual = scanner
             .into_iter()
@@ -421,7 +451,7 @@ mod test {
     fn keywords() {
         let keywords =
             "and class else false for fun if nil or print return super this true var while";
-        let scanner = Lexer::new_from_string(keywords);
+        let scanner = Lexer::new(keywords);
 
         let actual = scanner
             .into_iter()
@@ -453,7 +483,7 @@ mod test {
     #[test]
     fn string_literals() {
         let input = "\"some string value\"";
-        let scanner = Lexer::new_from_string(input);
+        let scanner = Lexer::new(input);
 
         let actual = scanner
             .into_iter()
@@ -470,7 +500,7 @@ mod test {
     #[test]
     fn string_literals_with_other_stuff() {
         let input = "var x = \"some string value\";";
-        let scanner = Lexer::new_from_string(input);
+        let scanner = Lexer::new(input);
 
         let actual = scanner
             .into_iter()
@@ -495,7 +525,7 @@ mod test {
     #[test]
     fn addition_and_subtraction() {
         let input = "1 + 2 - 3";
-        let scanner = Lexer::new_from_string(input);
+        let scanner = Lexer::new(input);
 
         let actual = scanner
             .into_iter()
@@ -516,7 +546,7 @@ mod test {
     #[test]
     fn numbers() {
         let input = "123 123.456 .456 123. 42.42";
-        let scanner = Lexer::new_from_string(input);
+        let scanner = Lexer::new(input);
 
         let actual = scanner
             .into_iter()
@@ -539,7 +569,7 @@ mod test {
     #[test]
     fn identifiers() {
         let input = "(foo, bar, baz)";
-        let scanner = Lexer::new_from_string(input);
+        let scanner = Lexer::new(input);
 
         let actual = scanner
             .into_iter()

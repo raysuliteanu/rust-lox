@@ -27,12 +27,12 @@ fn main() -> Result<ExitCode, miette::Error> {
         Some(command) => match command {
             LoxCommands::Tokenize { filename } => {
                 let source = get_source(filename)?;
-                let lexer = token::Lexer::new(filename.display().to_string(), source.as_str());
+                let lexer = token::Lexer::new(source.as_str());
                 lexer.tokenize()
             }
             LoxCommands::Parse { filename } => {
                 let source = get_source(filename)?;
-                let lexer = token::Lexer::new(filename.display().to_string(), source.as_str());
+                let lexer = token::Lexer::new(source.as_str());
                 let mut parser = parser::Parser::new(lexer.peekable());
                 parser.parse()
             }

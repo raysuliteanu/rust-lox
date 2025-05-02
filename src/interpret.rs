@@ -70,7 +70,7 @@ impl<'i> Interpreter<'i> {
     }
 
     fn evaluate(&self) -> InterpreterResult {
-        let lexer = Lexer::new(self.filename(), self.source());
+        let lexer = Lexer::new(self.source());
         let mut parser = parser::Parser::new(lexer.peekable());
         let ast = parser.ast()?;
 
