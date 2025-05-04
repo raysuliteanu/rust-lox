@@ -46,7 +46,7 @@ fn main() -> Result<ExitCode, miette::Error> {
     };
 
     let exit_code = match result {
-        Ok(_) => 0u8,
+        Ok(rc) => rc,
         Err(e) => {
             error_print(&e);
             e.code()

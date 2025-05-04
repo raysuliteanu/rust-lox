@@ -13,7 +13,7 @@ impl<'r> Repl<'r> {
         }
     }
 
-    pub fn run(&'r mut self) -> Result<(), miette::Error> {
+    pub fn run(&'r mut self) -> Result<u8, miette::Error> {
         let mut stdin = std::io::stdin().lock();
         let mut expr = String::new();
         loop {
@@ -36,7 +36,7 @@ impl<'r> Repl<'r> {
             expr.clear();
         }
 
-        Ok(())
+        Ok(0)
     }
 }
 

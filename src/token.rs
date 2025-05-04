@@ -102,7 +102,8 @@ impl<'le> Lexer<'le> {
         }
     }
 
-    pub fn tokenize(self) -> Result<(), miette::Error> {
+    pub fn tokenize(self) -> Result<u8, miette::Error> {
+        let mut rc = 0;
         for next in self {
             match next {
                 Ok(t) => {
@@ -110,13 +111,18 @@ impl<'le> Lexer<'le> {
                 }
                 Err(e) => {
                     error_print(&e);
+                    rc = e.code()
+                        .unwrap_or(Box::new("1"))
+                        .to_string()
+                        .parse::<u8>()
+                        .unwrap();
                 }
             }
         }
 
         println!("EOF  null");
 
-        Ok(())
+        Ok(rc)
     }
 
     fn offset(&self) -> usize {

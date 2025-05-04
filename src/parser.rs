@@ -35,10 +35,10 @@ where
         Self { lexer }
     }
 
-    pub fn parse(&mut self) -> Result<(), miette::Error> {
+    pub fn parse(&mut self) -> Result<u8, miette::Error> {
         let ast = self.ast()?;
         println!("{ast}");
-        Ok(())
+        Ok(0)
     }
 
     pub fn ast(&mut self) -> Result<Ast, miette::Error> {

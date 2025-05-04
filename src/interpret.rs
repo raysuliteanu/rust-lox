@@ -37,6 +37,7 @@ impl Display for InterpreterValue {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct Interpreter<'i> {
     src: Option<String>,
@@ -51,6 +52,7 @@ impl<'i> Interpreter<'i> {
         }
     }
 
+    #[allow(dead_code)]
     fn filename(&self) -> String {
         self.file
             .as_ref()
@@ -62,11 +64,11 @@ impl<'i> Interpreter<'i> {
         self.src.as_ref().map(|s| s.as_ref()).unwrap()
     }
 
-    pub fn interpret(&mut self, source: String) -> Result<(), miette::Error> {
+    pub fn interpret(&mut self, source: String) -> Result<u8, miette::Error> {
         self.src = Some(source);
         let result = self.evaluate()?;
         println!("{result}");
-        Ok(())
+        Ok(0)
     }
 
     fn evaluate(&self) -> InterpreterResult {
