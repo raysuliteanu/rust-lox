@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use miette::{IntoDiagnostic, Report, WrapErr};
-use rust_lox::{interpret, parser, repl, token};
+use rust_lox::{error_print, interpret, parser, repl, token};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::{fs, str};
@@ -48,7 +48,7 @@ fn main() -> Result<ExitCode, miette::Error> {
     let exit_code = match result {
         Ok(_) => 0u8,
         Err(e) => {
-            eprintln!("{:?}", e);
+            error_print(&e);
             e.code()
                 .unwrap_or(Box::new("1"))
                 .to_string()

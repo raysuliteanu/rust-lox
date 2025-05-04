@@ -4,6 +4,8 @@ use std::fmt::Display;
 use strum::{EnumMessage, IntoStaticStr};
 use thiserror::Error;
 
+use crate::error_print;
+
 macro_rules! number_token {
     ($l:ident, $v:ident) => {
         Token::Number { raw: String::from($l), value: $v, }
@@ -107,7 +109,7 @@ impl<'le> Lexer<'le> {
                     println!("{t}");
                 }
                 Err(e) => {
-                    eprintln!("{:?}", e);
+                    error_print(&e);
                 }
             }
         }

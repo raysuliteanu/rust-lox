@@ -1,6 +1,6 @@
 use std::io::{BufRead, Write, stdout};
 
-use crate::interpret;
+use crate::{error_print, interpret};
 
 pub struct Repl<'r> {
     interpreter: interpret::Interpreter<'r>,
@@ -31,7 +31,7 @@ impl<'r> Repl<'r> {
                 break;
             }
             let _ = self.interpreter.interpret(source).map_err(|e| {
-                eprintln!("{:?}", e);
+                error_print(&e);
             });
             expr.clear();
         }

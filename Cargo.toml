@@ -10,6 +10,9 @@ clap = { version = "4.5", features = ["derive"] }
 env_logger = "0.11.8"
 itertools = "0.14.0"
 log = "0.4.27"
-miette = { version = "7.6.0", features = ["fancy"] }
+miette = { version = "7.6.0" }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.12"
+
+[features]
+pretty-print = ["miette/fancy"]
