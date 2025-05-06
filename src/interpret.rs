@@ -16,6 +16,13 @@ macro_rules! runtime_error {
     ($msg:expr, $line:literal) => {
         miette::miette!(code = "70", "{}", format!("{}\n[line {}]", $msg, $line))
     };
+    ($msg:expr, $a1:expr, $a2:expr, $line:literal) => {
+        miette::miette!(
+            code = "70",
+            "{}",
+            format!("{} {} for {}\n[line {}]", $msg, $a1, $a2, $line)
+        )
+    };
 }
 
 #[derive(Debug)]
@@ -44,6 +51,7 @@ pub struct Interpreter<'i> {
     file: Option<&'i PathBuf>,
 }
 
+#[allow(dead_code)]
 impl<'i> Interpreter<'i> {
     pub fn new(file: &'i PathBuf) -> Self {
         Self {
@@ -52,7 +60,6 @@ impl<'i> Interpreter<'i> {
         }
     }
 
-    #[allow(dead_code)]
     fn filename(&self) -> String {
         self.file
             .as_ref()
@@ -61,7 +68,7 @@ impl<'i> Interpreter<'i> {
     }
 
     fn source(&self) -> &str {
-        self.src.as_ref().map(|s| s.as_ref()).unwrap()
+        self.src.as_ref().expect("source must be available")
     }
 
     pub fn interpret(&mut self, source: String) -> Result<u8, miette::Error> {
@@ -86,6 +93,13 @@ impl<'i> Interpreter<'i> {
                 Expr::Binary(l, op, r) => self.eval_binary_exp(l, op, r),
                 Expr::Unary(op, exp) => self.eval_unary_exp(op, exp),
                 Expr::Group(group_exp) => self.evaluate_all(group_exp),
+            },
+            Node::Stmt { ty, exp } => match ty {
+                KeywordKind::Print => {
+                    let val = self.evaluate_all(exp)?;
+                    Ok(val)
+                }
+                _ => unimplemented!(),
             },
         }
     }
@@ -244,7 +258,7 @@ impl<'i> Interpreter<'i> {
                     if t.borrow() == &Token::Literal(LiteralKind::Bang) {
                         Ok(InterpreterValue::Bool(!v))
                     } else {
-                        Ok(InterpreterValue::Bool(false))
+                        Err(runtime_error!("invalid operation", op, val, 1))?
                     }
                 }
                 InterpreterValue::Float(v) => {
@@ -265,7 +279,7 @@ impl<'i> Interpreter<'i> {
                 }
                 _ => Err(runtime_error!("Operand must be a number.", 1))?,
             },
-            _ => Err(runtime_error!("invalid operation {op} for {val}", 1))?,
+            _ => Err(runtime_error!("invalid operation", op, val, 1))?,
         }
     }
 }

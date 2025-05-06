@@ -1,6 +1,7 @@
 pub mod interpret;
 pub mod parser;
 pub mod repl;
+#[macro_use]
 pub mod token;
 
 // to support CodeCrafters output requirements, don't use miette fancy printing

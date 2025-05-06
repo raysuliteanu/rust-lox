@@ -21,6 +21,7 @@ macro_rules! number_token {
     };
 }
 
+#[macro_export]
 macro_rules! keyword_token {
     ($k:ident) => {
         match ($k) {
@@ -45,6 +46,7 @@ macro_rules! keyword_token {
      };
 }
 
+#[macro_export]
 macro_rules! literal_token {
     ($k:literal) => {
         match $k {

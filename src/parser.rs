@@ -11,6 +11,8 @@ use crate::token::KeywordKind;
 use crate::token::LiteralKind;
 use crate::token::Token;
 
+use crate::literal_token;
+
 pub struct Parser<T: Iterator> {
     lexer: Peekable<T>,
 }
@@ -43,7 +45,7 @@ where
 
     pub fn ast(&mut self) -> Result<Ast, miette::Error> {
         Ok(Ast {
-            tree: self.expression()?,
+            tree: self.program()?,
         })
     }
 
@@ -58,7 +60,59 @@ where
         }
     }
 
+    /*
+        program        → statement* EOF ;
+
+        statement      → exprStmt
+                    | printStmt ;
+
+        exprStmt       → expression ";" ;
+        printStmt      → "print" expression ";" ;
+    */
+    fn program(&mut self) -> ParserResult<Node> {
+        trace!("program()");
+        self.statement()
+    }
+
+    fn statement(&mut self) -> ParserResult<Node> {
+        trace!("statement()");
+        if self.matches(&[Token::Keyword(KeywordKind::Print)]) {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> ParserResult<Node> {
+        trace!("print_statement()");
+        self.lexer.next(); // eat 'print' keyword
+        let exp = self.expression()?;
+        if self
+            .lexer
+            .next()
+            .is_some_and(|r| r.is_ok_and(|t| t == literal_token!(';')))
+        {
+            // build print statement AST node
+            Ok(Node::Stmt {
+                ty: KeywordKind::Print,
+                exp: Box::new(exp),
+            })
+        } else {
+            Err(MissingToken {
+                expected: literal_token!(';'),
+                actual: literal_token!(';'), // todo: need actual token
+            }
+            .into())
+        }
+    }
+
+    fn expression_statement(&mut self) -> ParserResult<Node> {
+        trace!("expression_statement()");
+        self.expression()
+    }
+
     fn expression(&mut self) -> ParserResult<Node> {
+        trace!("expression()");
         self.equality()
     }
 
@@ -238,9 +292,11 @@ impl Display for Ast {
     }
 }
 
+#[derive(Debug)]
 pub enum Node {
     Terminal(Token),
     Expr(Box<Expr>),
+    Stmt { ty: KeywordKind, exp: Box<Node> },
 }
 
 impl Display for Node {
@@ -265,10 +321,12 @@ impl Display for Node {
                 Token::Identifier { value } | Token::String { value } => write!(f, "{value}"),
             },
             Node::Expr(e) => write!(f, "{e}"),
+            Node::Stmt { ty, exp } => write!(f, "{} {}", ty, exp),
         }
     }
 }
 
+#[derive(Debug)]
 pub enum Expr {
     Unary(Node, Box<Node>),
     Binary(Box<Node>, Node, Box<Node>),
@@ -287,10 +345,12 @@ impl Display for Expr {
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("Unexpected EOF")]
+#[diagnostic(code("65"))]
 pub struct UnexpectedEof;
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("missing token {expected} got {actual}")]
+#[diagnostic(code("65"))]
 pub struct MissingToken {
     expected: Token,
     actual: Token,
@@ -298,6 +358,7 @@ pub struct MissingToken {
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("Unexpected token {token}")]
+#[diagnostic(code("65"))]
 pub struct UnexpectedToken {
     token: Token,
 }
