@@ -1,3 +1,5 @@
+use log::trace;
+
 use crate::parser;
 use crate::parser::Expr;
 use crate::parser::Node;
@@ -73,17 +75,16 @@ impl<'i> Interpreter<'i> {
 
     pub fn interpret(&mut self, source: String) -> Result<u8, miette::Error> {
         self.src = Some(source);
-        let result = self.evaluate()?;
-        println!("{result}");
-        Ok(0)
-    }
-
-    fn evaluate(&self) -> InterpreterResult {
         let lexer = Lexer::new(self.source());
         let mut parser = parser::Parser::new(lexer.peekable());
         let ast = parser.ast()?;
 
-        self.evaluate_all(&ast.tree)
+        for n in &ast.tree {
+            trace!("evaluating: {n}");
+            let result = self.evaluate_all(n)?;
+            println!("{result}");
+        }
+        Ok(0)
     }
 
     pub fn evaluate_all(&self, node: &Node) -> InterpreterResult {

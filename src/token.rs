@@ -21,9 +21,31 @@ macro_rules! number_token {
     };
 }
 
+// TODO: don't duplicate all the code in the branches
 #[macro_export]
 macro_rules! keyword_token {
     ($k:ident) => {
+        match ($k) {
+            "and" => Some(Token::Keyword(KeywordKind::And)),
+            "class" => Some(Token::Keyword(KeywordKind::Class)),
+            "else" => Some(Token::Keyword(KeywordKind::Else)),
+            "false" => Some(Token::Keyword(KeywordKind::False)),
+            "for" => Some(Token::Keyword(KeywordKind::For)),
+            "fun" => Some(Token::Keyword(KeywordKind::Fun)),
+            "if" => Some(Token::Keyword(KeywordKind::If)),
+            "nil" => Some(Token::Keyword(KeywordKind::Nil)),
+            "or" => Some(Token::Keyword(KeywordKind::Or)),
+            "print" => Some(Token::Keyword(KeywordKind::Print)),
+            "return" => Some(Token::Keyword(KeywordKind::Return)),
+            "super" => Some(Token::Keyword(KeywordKind::Super)),
+            "this" => Some(Token::Keyword(KeywordKind::This)),
+            "true" => Some(Token::Keyword(KeywordKind::True)),
+            "var" => Some(Token::Keyword(KeywordKind::Var)),
+            "while" => Some(Token::Keyword(KeywordKind::While)),
+        _ => None,
+        }
+    };
+    ($k:literal) => {
         match ($k) {
             "and" => Some(Token::Keyword(KeywordKind::And)),
             "class" => Some(Token::Keyword(KeywordKind::Class)),

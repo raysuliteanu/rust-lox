@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::fmt::Write as _;
 use std::iter::Peekable;
 
 use log::trace;
@@ -60,50 +61,64 @@ where
         }
     }
 
-    /*
-        program        → statement* EOF ;
-
-        statement      → exprStmt
-                    | printStmt ;
-
-        exprStmt       → expression ";" ;
-        printStmt      → "print" expression ";" ;
-    */
-    fn program(&mut self) -> ParserResult<Node> {
+    fn program(&mut self) -> ParserResult<Vec<Node>> {
         trace!("program()");
-        self.statement()
+        let mut program = vec![];
+        while let Some(result) = self.statement() {
+            match result {
+                Ok(n) => program.push(n),
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(program)
     }
 
-    fn statement(&mut self) -> ParserResult<Node> {
+    // statement => print_statement | expression_statement ";"
+    fn statement(&mut self) -> Option<ParserResult<Node>> {
         trace!("statement()");
-        if self.matches(&[Token::Keyword(KeywordKind::Print)]) {
-            self.print_statement()
+        if let Some(r) = self.lexer.peek() {
+            match r {
+                Ok(t) => {
+                    let node = match t {
+                        Token::Keyword(keyword_kind) => match keyword_kind {
+                            KeywordKind::Print => self.print_statement(),
+                            _ => unimplemented!(),
+                        },
+                        _ => self.expression_statement(),
+                    };
+
+                    if self.matches(&[literal_token!(';')]) {
+                        self.lexer.next(); // eat ';'
+                        Some(node)
+                    } else {
+                        todo!("missing ';'");
+                    }
+                }
+                Err(_e) => todo!(),
+            }
         } else {
-            self.expression_statement()
+            trace!("EOF");
+            None
         }
     }
 
+    // print_statement => "print" expression
     fn print_statement(&mut self) -> ParserResult<Node> {
         trace!("print_statement()");
-        self.lexer.next(); // eat 'print' keyword
+
+        let print_token = self.lexer.next();
+        assert_eq!(
+            Token::Keyword(KeywordKind::Print),
+            print_token.unwrap().unwrap()
+        );
+
         let exp = self.expression()?;
-        if self
-            .lexer
-            .next()
-            .is_some_and(|r| r.is_ok_and(|t| t == literal_token!(';')))
-        {
-            // build print statement AST node
-            Ok(Node::Stmt {
-                ty: KeywordKind::Print,
-                exp: Box::new(exp),
-            })
-        } else {
-            Err(MissingToken {
-                expected: literal_token!(';'),
-                actual: literal_token!(';'), // todo: need actual token
-            }
-            .into())
-        }
+        // build print statement AST node
+        Ok(Node::Stmt {
+            ty: KeywordKind::Print,
+            exp: Box::new(exp),
+        })
     }
 
     fn expression_statement(&mut self) -> ParserResult<Node> {
@@ -283,12 +298,16 @@ where
 }
 
 pub struct Ast {
-    pub tree: Node,
+    pub tree: Vec<Node>,
 }
 
 impl Display for Ast {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.tree)
+        let mut buf = String::new();
+        for n in &self.tree {
+            write!(&mut buf, "{n}")?
+        }
+        write!(f, "{buf}")
     }
 }
 
@@ -388,7 +407,7 @@ mod tests {
     #[test]
     fn print_ast() {
         let ast = Ast {
-            tree: Node::Expr(Box::new(Expr::Binary(
+            tree: vec![Node::Expr(Box::new(Expr::Binary(
                 Box::new(Node::Terminal(Token::Number {
                     raw: "1.23".to_string(),
                     value: 1.23,
@@ -398,7 +417,7 @@ mod tests {
                     raw: "1.23".to_string(),
                     value: 1.23,
                 })),
-            ))),
+            )))],
         };
 
         let fmt = format!("{ast}");
