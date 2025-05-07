@@ -73,7 +73,17 @@ impl<'i> Interpreter<'i> {
         self.src.as_ref().expect("source must be available")
     }
 
-    pub fn interpret(&mut self, source: String) -> Result<u8, miette::Error> {
+    pub fn evaluate(&mut self, source: String) -> Result<u8, miette::Error> {
+        self.src = Some(source);
+        let lexer = Lexer::new(self.source());
+        let mut parser = parser::Parser::new(lexer.peekable());
+        let ast = parser.expression()?;
+        let result = self.evaluate_all(&ast)?;
+        println!("{result}");
+        Ok(0)
+    }
+
+    pub fn run(&mut self, source: String) -> Result<u8, miette::Error> {
         self.src = Some(source);
         let lexer = Lexer::new(self.source());
         let mut parser = parser::Parser::new(lexer.peekable());
@@ -84,6 +94,7 @@ impl<'i> Interpreter<'i> {
             let result = self.evaluate_all(n)?;
             println!("{result}");
         }
+
         Ok(0)
     }
 

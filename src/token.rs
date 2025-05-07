@@ -144,7 +144,7 @@ impl<'le> Lexer<'le> {
             }
         }
 
-        println!("EOF  null");
+        println!("{}", Token::Eof);
 
         Ok(rc)
     }
@@ -340,6 +340,7 @@ pub enum Token {
     Number { raw: String, value: f64 },
     Identifier { value: String },
     String { value: String },
+    Eof,
 }
 
 impl Display for Token {
@@ -357,6 +358,7 @@ impl Display for Token {
             }
             Token::Identifier { value } => write!(f, "IDENTIFIER {value} null"),
             Token::String { value } => write!(f, "STRING \"{value}\" {value}"),
+            Token::Eof => write!(f, "EOF  null"),
         }
     }
 }

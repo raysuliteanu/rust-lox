@@ -1,4 +1,4 @@
-use std::io::{BufRead, Write, stdout};
+use std::io::{stdout, BufRead, Write};
 
 use crate::{error_print, interpret};
 
@@ -30,7 +30,7 @@ impl<'r> Repl<'r> {
             if source == "exit" || source == "quit" || source == "q" {
                 break;
             }
-            let _ = self.interpreter.interpret(source).map_err(|e| {
+            let _ = self.interpreter.evaluate(source).map_err(|e| {
                 error_print(&e);
             });
             expr.clear();

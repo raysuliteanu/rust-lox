@@ -16,6 +16,7 @@ enum LoxCommands {
     Tokenize { filename: PathBuf },
     Parse { filename: PathBuf },
     Evaluate { filename: PathBuf },
+    Run { filename: PathBuf },
 }
 
 fn main() -> Result<ExitCode, miette::Error> {
@@ -39,7 +40,12 @@ fn main() -> Result<ExitCode, miette::Error> {
             LoxCommands::Evaluate { filename } => {
                 let source = get_source(filename)?;
                 let mut interpreter = interpret::Interpreter::new(filename);
-                interpreter.interpret(source)
+                interpreter.evaluate(source)
+            }
+            LoxCommands::Run { filename } => {
+                let source = get_source(filename)?;
+                let mut interpreter = interpret::Interpreter::new(filename);
+                interpreter.run(source)
             }
         },
         None => repl::Repl::new().run(),

@@ -77,25 +77,32 @@ where
     // statement => print_statement | expression_statement ";"
     fn statement(&mut self) -> Option<ParserResult<Node>> {
         trace!("statement()");
-        if let Some(r) = self.lexer.peek() {
-            match r {
-                Ok(t) => {
-                    let node = match t {
-                        Token::Keyword(keyword_kind) => match keyword_kind {
-                            KeywordKind::Print => self.print_statement(),
-                            _ => unimplemented!(),
-                        },
-                        _ => self.expression_statement(),
-                    };
+        if let Some(Ok(t)) = self.lexer.peek() {
+            let node = match t {
+                Token::Keyword(keyword_kind) => match keyword_kind {
+                    KeywordKind::Print => self.print_statement(),
+                    _ => unimplemented!(),
+                },
+                _ => self.expression_statement(),
+            };
 
-                    if self.matches(&[literal_token!(';')]) {
-                        self.lexer.next(); // eat ';'
-                        Some(node)
-                    } else {
-                        todo!("missing ';'");
+            let next = self.lexer.next();
+            if let Some(Ok(next_token)) = next {
+                if next_token == literal_token!(';') {
+                    Some(node)
+                } else {
+                    Some(Err(MissingToken {
+                        expected: literal_token!(';'),
+                        actual: next_token,
                     }
+                    .into()))
                 }
-                Err(_e) => todo!(),
+            } else {
+                Some(Err(MissingToken {
+                    expected: literal_token!(';'),
+                    actual: Token::Eof,
+                }
+                .into()))
             }
         } else {
             trace!("EOF");
@@ -126,7 +133,7 @@ where
         self.expression()
     }
 
-    fn expression(&mut self) -> ParserResult<Node> {
+    pub(crate) fn expression(&mut self) -> ParserResult<Node> {
         trace!("expression()");
         self.equality()
     }
@@ -321,7 +328,6 @@ pub enum Node {
 impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            //
             Node::Terminal(t) => match t {
                 Token::Keyword(k) => write!(
                     f,
@@ -338,6 +344,7 @@ impl Display for Node {
                     }
                 }
                 Token::Identifier { value } | Token::String { value } => write!(f, "{value}"),
+                Token::Eof => write!(f, ""),
             },
             Node::Expr(e) => write!(f, "{e}"),
             Node::Stmt { ty, exp } => write!(f, "{} {}", ty, exp),
